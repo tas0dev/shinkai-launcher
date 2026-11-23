@@ -15,18 +15,15 @@ import java.nio.file.Path
 import java.util.Timer
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
-import java.util.concurrent.ExecutionException
 import javax.swing.JDialog
 import javax.swing.JOptionPane
-import javax.swing.SwingWorker
 import javax.swing.UIManager
 import kotlin.concurrent.timer
 import kotlin.system.exitProcess
 
 class GUIHandler : IUserInterface {
 	private lateinit var frmPackwizlauncher: InstallWindow
-	private var brandingWorker: SwingWorker<LauncherBranding, Void>? = null
-	private var homeBranding: LauncherBranding? = null
+	private var homeBranding = LauncherBranding("")
 	private var defaultPackName = LauncherIdentity.NAME
 	private val launchDecision = CompletableFuture<Boolean>()
 
@@ -84,7 +81,6 @@ class GUIHandler : IUserInterface {
 	}
 
 	override fun dispose() = frmPackwizlauncher.afterSettingsClose {
-		brandingWorker?.cancel(true)
 		frmPackwizlauncher.dispose()
 	}
 
@@ -103,36 +99,18 @@ class GUIHandler : IUserInterface {
 		}
 	}
 
-	fun loadHomeBranding(load: () -> LauncherBranding) = EventQueue.invokeLater { loadBranding(load) }
+	fun setHomeBranding(branding: LauncherBranding) = EventQueue.invokeAndWait {
+		homeBranding = branding
+		refreshBranding()
+	}
 
 	override fun setPackName(packName: String) = EventQueue.invokeLater {
 		defaultPackName = packName
 		refreshBranding()
 	}
 
-	private fun loadBranding(load: () -> LauncherBranding) {
-		if (!frmPackwizlauncher.isDisplayable || launchDecision.getNow(null) == false) return
-		val worker = object : SwingWorker<LauncherBranding, Void>() {
-			override fun doInBackground() = load()
-
-			override fun done() {
-				if (isCancelled || brandingWorker !== this || !frmPackwizlauncher.isDisplayable) return
-				try {
-					homeBranding = get()
-					refreshBranding()
-				} catch (e: ExecutionException) {
-					Log.warn("Failed to load launcher branding", e)
-				} finally {
-					brandingWorker = null
-				}
-			}
-		}
-		brandingWorker = worker
-		worker.execute()
-	}
-
 	private fun refreshBranding() {
-		val current = homeBranding ?: LauncherBranding(defaultPackName)
+		val current = homeBranding
 		applyBranding(if (current.title.isBlank()) current.copy(title = defaultPackName) else current)
 	}
 

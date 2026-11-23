@@ -10,12 +10,15 @@ import okio.buffer
 import okio.source
 import java.awt.Image
 import java.awt.Toolkit
+import java.awt.image.ImageObserver
 import java.io.IOException
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardOpenOption.CREATE_NEW
 import java.nio.file.StandardOpenOption.WRITE
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.TimeUnit
 import javax.imageio.ImageIO
 import javax.imageio.stream.FileImageInputStream
 
@@ -112,13 +115,39 @@ private fun loadBackground(file: Path): Image? {
 					screen.attributes.getNamedItem("logicalScreenHeight").nodeValue.toInt()
 				)
 				// AWT decodes consecutive frames with their delays and disposal rules as the image is displayed.
-				return Toolkit.getDefaultToolkit().createImage(file.toString())
+				return prepareGif(file)
 			}
 			return reader.read(0)
 		} finally {
 			reader.dispose()
 		}
 	}
+}
+
+private fun prepareGif(file: Path): Image {
+	val toolkit = Toolkit.getDefaultToolkit()
+	val image = toolkit.createImage(file.toString())
+	val firstFrame = CompletableFuture<Boolean>()
+	val observer = ImageObserver { _, flags, _, _, _, _ ->
+		when {
+			flags and (ImageObserver.ERROR or ImageObserver.ABORT) != 0 -> {
+				firstFrame.complete(false)
+				false
+			}
+			flags and ImageObserver.ALLBITS != 0 -> {
+				firstFrame.complete(true)
+				false
+			}
+			else -> {
+				if (flags and ImageObserver.FRAMEBITS != 0) firstFrame.complete(true)
+				true
+			}
+		}
+	}
+	if (!toolkit.prepareImage(image, -1, -1, observer) && !firstFrame.get(5, TimeUnit.SECONDS)) {
+		throw IOException("Could not decode GIF")
+	}
+	return image
 }
 
 private fun checkBackgroundDimensions(width: Int, height: Int) {

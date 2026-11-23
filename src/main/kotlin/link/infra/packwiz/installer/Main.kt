@@ -74,8 +74,6 @@ class Main(args: Array<String>) {
 			ui.title = title
 		}
 
-		ui.show()
-
 		val packFileRaw = unparsedArgs[0]
 
 		val packFile = when {
@@ -116,7 +114,10 @@ class Main(args: Array<String>) {
 		}
 
 		if (ui is GUIHandler) {
-			ui.loadHomeBranding { loadLauncherBranding(packFolder.nioPath) }
+			ui.setHomeBranding(loadLauncherBranding(packFolder.nioPath))
+		}
+		ui.show()
+		if (ui is GUIHandler) {
 			if (!ui.awaitLaunch()) {
 				ui.dispose()
 				exitProcess(1)
