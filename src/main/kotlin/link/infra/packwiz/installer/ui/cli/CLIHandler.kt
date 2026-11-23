@@ -1,11 +1,16 @@
 package link.infra.packwiz.installer.ui.cli
 
+import link.infra.packwiz.installer.ui.DownloadDirectories
 import link.infra.packwiz.installer.ui.IUserInterface
 import link.infra.packwiz.installer.ui.IUserInterface.ExceptionListResult
 import link.infra.packwiz.installer.ui.data.ExceptionDetails
 import link.infra.packwiz.installer.ui.data.IOptionDetails
 import link.infra.packwiz.installer.ui.data.InstallProgress
+import link.infra.packwiz.installer.ui.data.ManualDownload
 import link.infra.packwiz.installer.util.Log
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.system.exitProcess
 
 class CLIHandler : IUserInterface {
@@ -61,6 +66,23 @@ class CLIHandler : IUserInterface {
 			ex.exception.printStackTrace()
 		}
 		return ExceptionListResult.CANCEL
+	}
+
+	override fun showManualDownloads(downloads: List<ManualDownload>, scan: (Path) -> Set<ManualDownload>): Boolean {
+		val directory = DownloadDirectories.preferredDirectory()
+		val installed = try {
+			if (Files.isDirectory(directory)) scan(directory) else emptySet()
+		} catch (e: IOException) {
+			Log.warn("Could not import manual downloads from $directory", e)
+			emptySet()
+		}
+		val missing = downloads.filterNot { it in installed }
+		if (missing.isEmpty()) return true
+		Log.warn("Download the following files into $directory or save each to its listed installation path, then rerun the installer.")
+		for (file in missing) {
+			println("${file.name} (${file.filename}): ${file.url}\n  Installation path: ${file.destination}")
+		}
+		return false
 	}
 
 	override fun awaitOptionalButton(showCancel: Boolean, timeout: Long) {

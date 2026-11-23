@@ -43,6 +43,9 @@ data class ModFile(
 	@Transient
 	val resolvedUpdateData = mutableMapOf<String, PackwizPath<*>>()
 
+	@Transient
+	var curseForgeResolutionError: Exception? = null
+
 	data class Option(
 		val optional: Boolean,
 		val description: String = "",
@@ -62,6 +65,7 @@ data class ModFile(
 				(download.url ?: throw Exception("No download URL provided")).source(clientHolder)
 			}
 			DownloadMode.CURSEFORGE -> {
+				curseForgeResolutionError?.let { throw it }
 				if (!resolvedUpdateData.contains("curseforge")) {
 					throw Exception("Metadata file specifies CurseForge mode, but is missing metadata")
 				}

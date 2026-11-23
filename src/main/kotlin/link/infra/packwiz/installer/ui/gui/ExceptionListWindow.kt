@@ -1,17 +1,12 @@
 package link.infra.packwiz.installer.ui.gui
 
-import link.infra.packwiz.installer.util.Log
 import link.infra.packwiz.installer.ui.IUserInterface
 import link.infra.packwiz.installer.ui.data.ExceptionDetails
 import java.awt.BorderLayout
-import java.awt.Desktop
 import java.awt.event.WindowAdapter
 import java.awt.event.WindowEvent
-import java.io.IOException
 import java.io.PrintWriter
 import java.io.StringWriter
-import java.net.URI
-import java.net.URISyntaxException
 import java.util.concurrent.CompletableFuture
 import javax.swing.*
 import javax.swing.border.EmptyBorder
@@ -23,24 +18,6 @@ class ExceptionListWindow(eList: List<ExceptionDetails>, future: CompletableFutu
 		override fun getSize() = details.size
 		override fun getElementAt(index: Int) = details[index].name
 		fun getExceptionAt(index: Int) = details[index].exception
-	}
-
-	private fun openUrl(url: String) {
-		try {
-			if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
-				Desktop.getDesktop().browse(URI(url))
-			} else {
-				val process = Runtime.getRuntime().exec(arrayOf("xdg-open", url));
-				val exitValue = process.waitFor()
-				if (exitValue > 0) {
-					Log.warn("Failed to open $url: xdg-open exited with code $exitValue")
-				}
-			}
-		} catch (e: IOException) {
-			Log.warn("Failed to open $url", e)
-		} catch (e: URISyntaxException) {
-			Log.warn("Failed to open $url", e)
-		}
 	}
 
 	/**
@@ -139,7 +116,7 @@ class ExceptionListWindow(eList: List<ExceptionDetails>, future: CompletableFutu
 							toolTipText = "Open missing mods in your browser"
 							addActionListener {
 								missingMods.forEach {
-									openUrl(it)
+									openWebPage(this@ExceptionListWindow, it)
 								}
 							}
 						})
@@ -155,7 +132,7 @@ class ExceptionListWindow(eList: List<ExceptionDetails>, future: CompletableFutu
 				add(JPanel().apply {
 					add(JButton("Report issue").apply {
 						addActionListener {
-							openUrl("https://github.com/packwiz/packwiz-installer/issues/new")
+							openWebPage(this@ExceptionListWindow, "https://github.com/packwiz/packwiz-installer/issues/new")
 						}
 					})
 				}, BorderLayout.WEST)

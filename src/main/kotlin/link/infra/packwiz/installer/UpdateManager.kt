@@ -9,6 +9,7 @@ import link.infra.packwiz.installer.metadata.DownloadMode
 import link.infra.packwiz.installer.metadata.IndexFile
 import link.infra.packwiz.installer.metadata.ManifestFile
 import link.infra.packwiz.installer.metadata.PackFile
+import link.infra.packwiz.installer.metadata.curseforge.getCfProjectPages
 import link.infra.packwiz.installer.metadata.curseforge.resolveCfMetadata
 import link.infra.packwiz.installer.metadata.hash.Hash
 import link.infra.packwiz.installer.metadata.hash.HashFormat
@@ -98,6 +99,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 				ui.showErrorAndExit("Failed to parse pack.toml", e)
 			}
 		}
+		ui.showPackBranding(pf.name) { loadLauncherBranding(opts.packFile, pf.name, clientHolder) }
 
 		if (ui.cancelButtonPressed) {
 			showCancellationDialog()
@@ -138,19 +140,8 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 					continue
 				}
 
-				var invalid = false
-				// if isn't optional, or is optional but optionValue == true
-				if (!file.isOptional || file.optionValue) {
-					if (file.cachedLocation != null) {
-						if (!file.cachedLocation!!.nioPath.toFile().exists()) {
-							invalid = true
-						}
-					} else {
-						// if cachedLocation == null, should probably be installed!!
-						invalid = true
-					}
-				}
-				if (invalid) {
+				val required = !file.isOptional || file.optionValue
+				if (required && file.cachedLocation?.let { Files.isRegularFile(it.nioPath) } != true) {
 					Log.info("File ${fileUri.filename} invalidated, marked for redownloading")
 					invalidatedUris.add(fileUri)
 				}
@@ -161,6 +152,10 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 				ui.submitProgress(InstallProgress("Modpack is already up to date!", 1, 1))
 				if (manifest.cachedFiles.any { it.value.isOptional }) {
 					ui.awaitOptionalButton(false, opts.timeout)
+				}
+				if (ui.cancelButtonPressed) {
+					showCancellationDialog()
+					handleCancellation()
 				}
 				if (!ui.optionsButtonPressed) {
 					return
@@ -214,11 +209,11 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 				if (manifest.cachedFiles.any { it.value.isOptional }) {
 					ui.awaitOptionalButton(false, opts.timeout)
 				}
-				if (!ui.optionsButtonPressed) {
-					return
-				}
 				if (ui.cancelButtonPressed) {
 					showCancellationDialog()
+					return
+				}
+				if (!ui.optionsButtonPressed) {
 					return
 				}
 			}
@@ -346,13 +341,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		// TODO: keep this enabled? then apply changes after download process?
 		ui.disableOptionsButton(optionTasks.isNotEmpty())
 
-		while (true) {
-			when (validateAndResolve(tasks, clientHolder)) {
-				ResolveResult.RETRY -> {}
-				ResolveResult.QUIT -> return
-				ResolveResult.SUCCESS -> break
-			}
-		}
+		validateAndResolve(tasks, clientHolder)
 
 		// TODO: different thread pool type?
 		val threadPool = Executors.newFixedThreadPool(10)
@@ -371,18 +360,6 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			} catch (e: ExecutionException) {
 				ui.showErrorAndExit("Failed to execute download task", e)
 			}
-			// Update manifest - If there were no errors cachedFile has already been modified in place (good old pass by reference)
-			task.cachedFile?.let { file ->
-				if (task.failed()) {
-					val oldFile = file.revert
-					if (oldFile != null) {
-						manifest.cachedFiles.putIfAbsent(task.metadata.file.rebase(opts.packFolder), oldFile)
-					} else { null }
-				} else {
-					manifest.cachedFiles.putIfAbsent(task.metadata.file.rebase(opts.packFolder), file)
-				}
-			}
-
 			val exDetails = task.exceptionDetails
 			val progress = if (exDetails != null) {
 				"Failed to download ${exDetails.name}: ${exDetails.exception.message}"
@@ -412,10 +389,33 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		// Shut down the thread pool when the update is done
 		threadPool.shutdown()
 
-		val failedTasks2ElectricBoogaloo = tasks.asSequence().map(DownloadTask::exceptionDetails).filterNotNull().toList()
-		if (failedTasks2ElectricBoogaloo.isNotEmpty()) {
+		val cfPages = getCfProjectPages(tasks.mapNotNull { it.failedCurseForgeUpdate?.projectId }.distinct(), clientHolder.okHttpClient)
+		val manual = tasks.mapNotNull { task ->
+			task.manualDownload(opts.packFolder, cfPages)?.let { it to task }
+		}.toMap()
+		if (manual.isNotEmpty()) {
+			val scanner = ManualDownloadScanner(manual, opts.packFolder)
+			if (!ui.showManualDownloads(manual.keys.toList(), scanner::scan)) {
+				cancelled = true
+				return
+			}
+			if (manual.values.none(DownloadTask::failed)) {
+				ui.submitProgress(InstallProgress("Finished importing manual downloads", tasks.size, tasks.size))
+			}
+		}
+
+		for (task in tasks) {
+			val file = task.cachedFile ?: continue
+			val saved = if (task.failed()) file.revert else file
+			val key = task.metadata.file.rebase(opts.packFolder)
+			if (saved != null) manifest.cachedFiles[key] = saved else manifest.cachedFiles.remove(key)
+		}
+
+		val pagesByTask = manual.entries.associate { (download, task) -> task to download.url }
+		val failed = tasks.mapNotNull { task -> task.exceptionDetails?.copy(modUrl = pagesByTask[task]) }
+		if (failed.isNotEmpty()) {
 			errorsOccurred = true
-			when (ui.showExceptions(failedTasks2ElectricBoogaloo, tasks.size, false)) {
+			when (ui.showExceptions(failed, tasks.size, false)) {
 				ExceptionListResult.CONTINUE -> {}
 				ExceptionListResult.CANCEL -> cancelled = true
 				ExceptionListResult.IGNORE -> cancelledStartGame = true
@@ -423,47 +423,24 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		}
 	}
 
-	enum class ResolveResult {
-		RETRY,
-		QUIT,
-		SUCCESS;
-	}
-
-	private fun validateAndResolve(nonFailedFirstTasks: List<DownloadTask>, clientHolder: ClientHolder): ResolveResult {
+	private fun validateAndResolve(tasks: List<DownloadTask>, clientHolder: ClientHolder) {
 		ui.submitProgress(InstallProgress("Validating existing files..."))
 
 		// Validate existing files
-		for (downloadTask in nonFailedFirstTasks.filter(DownloadTask::correctSide)) {
+		for (downloadTask in tasks.filter(DownloadTask::correctSide)) {
 			downloadTask.validateExistingFile(opts.packFolder, clientHolder)
 		}
 
 		// Resolve CurseForge metadata
-		val cfFiles = nonFailedFirstTasks.asSequence().filter { !it.alreadyUpToDate }
+		val cfFiles = tasks.asSequence().filter { !it.alreadyUpToDate && !it.failed() }
 			.filter(DownloadTask::correctSide)
-			.map { it.metadata }
-			.filter { it.linkedFile != null }
-			.filter { it.linkedFile!!.download.mode == DownloadMode.CURSEFORGE }.toList()
+			.filter { !it.isOptional || it.optionValue }
+			.mapNotNull { it.metadata.linkedFile }
+			.filter { it.download.mode == DownloadMode.CURSEFORGE }.toList()
 		if (cfFiles.isNotEmpty()) {
 			ui.submitProgress(InstallProgress("Resolving CurseForge metadata..."))
-			val resolveFailures = resolveCfMetadata(cfFiles, opts.packFolder, clientHolder)
-			if (resolveFailures.isNotEmpty()) {
-				errorsOccurred = true
-				return when (ui.showExceptions(resolveFailures, cfFiles.size, true)) {
-					ExceptionListResult.CONTINUE -> {
-						ResolveResult.RETRY
-					}
-					ExceptionListResult.CANCEL -> {
-						cancelled = true
-						ResolveResult.QUIT
-					}
-					ExceptionListResult.IGNORE -> {
-						cancelledStartGame = true
-						ResolveResult.QUIT
-					}
-				}
-			}
+			resolveCfMetadata(cfFiles, clientHolder.okHttpClient)
 		}
-		return ResolveResult.SUCCESS
 	}
 
 	private fun showCancellationDialog() {

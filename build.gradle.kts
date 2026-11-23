@@ -13,6 +13,10 @@ java {
 	sourceCompatibility = JavaVersion.VERSION_1_8
 }
 
+tasks.withType<JavaCompile>().configureEach {
+	options.encoding = "UTF-8"
+}
+
 repositories {
 	mavenCentral()
 	google()
@@ -39,12 +43,20 @@ dependencies {
 	implementation(kotlin("stdlib-jdk8"))
 	implementation("com.squareup.okhttp3:okhttp:4.10.0")
 	implementation("cc.ekblad:4koma:1.1.0")
+	testImplementation("junit:junit:4.13.2")
 
 	r8("com.android.tools:r8:3.3.28")
 }
 
 application {
-	mainClass.set("link.infra.packwiz.installer.RequiresBootstrap")
+	mainClass.set("link.infra.packwiz.installer.ShinaiLauncher")
+}
+
+tasks.processResources {
+	from("docs/assets") {
+		include("YoungSerif-Regular.ttf", "YoungSerif-OFL.txt", "evergreen-valley.jpg")
+		into("link/infra/packwiz/installer/ui")
+	}
 }
 
 val gitVersion: groovy.lang.Closure<*> by extra
@@ -52,7 +64,7 @@ version = gitVersion()
 
 tasks.jar {
 	manifest {
-		attributes["Main-Class"] = "link.infra.packwiz.installer.RequiresBootstrap"
+		attributes["Main-Class"] = application.mainClass.get()
 		attributes["Implementation-Version"] = project.version
 	}
 }

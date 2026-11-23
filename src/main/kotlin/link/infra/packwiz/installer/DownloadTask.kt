@@ -2,21 +2,29 @@ package link.infra.packwiz.installer
 
 import link.infra.packwiz.installer.metadata.IndexFile
 import link.infra.packwiz.installer.metadata.ManifestFile
+import link.infra.packwiz.installer.metadata.curseforge.CurseForgeUpdateData
 import link.infra.packwiz.installer.metadata.hash.Hash
 import link.infra.packwiz.installer.metadata.hash.HashFormat
 import link.infra.packwiz.installer.request.RequestException
 import link.infra.packwiz.installer.target.ClientHolder
 import link.infra.packwiz.installer.target.Side
+import link.infra.packwiz.installer.target.path.HttpUrlPath
 import link.infra.packwiz.installer.target.path.PackwizFilePath
 import link.infra.packwiz.installer.ui.data.ExceptionDetails
 import link.infra.packwiz.installer.ui.data.IOptionDetails
+import link.infra.packwiz.installer.ui.data.ManualDownload
 import link.infra.packwiz.installer.util.Log
 import okio.Buffer
-import okio.HashingSink
+import okhttp3.HttpUrl.Companion.toHttpUrl
+import okio.Source
 import okio.blackholeSink
 import okio.buffer
+import okio.sink
+import okio.source
 import java.io.IOException
+import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
+import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 
 internal class DownloadTask private constructor(val metadata: IndexFile.File, val index: IndexFile, private val downloadSide: Side) : IOptionDetails {
@@ -24,6 +32,7 @@ internal class DownloadTask private constructor(val metadata: IndexFile.File, va
 		private set
 
 	private var err: Exception? = null
+	private var failedDownloadHash: Hash<*>? = null
 	val exceptionDetails get() = err?.let { e -> ExceptionDetails(name, e) }
 
 	fun failed() = err != null
@@ -226,90 +235,121 @@ internal class DownloadTask private constructor(val metadata: IndexFile.File, va
 			}
 		}
 
-		// TODO: add .disabled support?
-
-		try {
-			val hash: Hash<*>
-			val fileHashFormat: HashFormat<*>
-			val linkedFile = metadata.linkedFile
-
-			if (linkedFile != null) {
-				hash = linkedFile.hash
-				fileHashFormat = linkedFile.download.hashFormat
-			} else {
-				hash = metadata.getHashObj(index)
-				fileHashFormat = metadata.hashFormat(index)
-			}
-
-			val src = metadata.getSource(clientHolder)
-			val fileSource = fileHashFormat.source(src)
-			val data = Buffer()
-
-			// Read all the data into a buffer (very inefficient for large files! but allows rollback if hash check fails)
-			// TODO: should we instead rename the existing file, then stream straight to the file and rollback from the renamed file?
-			fileSource.buffer().use {
-				it.readAll(data)
-			}
-
-			if (hash == fileSource.hash) {
-				// isDirectory follows symlinks, but createDirectories doesn't
-				try {
-					Files.createDirectories(destPath.parent.nioPath)
-				} catch (e: java.nio.file.FileAlreadyExistsException) {
-					if (!Files.isDirectory(destPath.parent.nioPath)) {
-						throw e
-					}
-				}
-				Files.copy(data.inputStream(), destPath.nioPath, StandardCopyOption.REPLACE_EXISTING)
-				data.clear()
-			} else {
-				// TODO: move println to something visible in the error window
-				println("Invalid hash for " + metadata.destURI.toString())
-				println("Calculated: " + fileSource.hash)
-				println("Expected:   $hash")
-				// Attempt to get the SHA256 hash
-				val sha256 = HashingSink.sha256(blackholeSink())
-				data.readAll(sha256)
-				println("SHA256 hash value: " + sha256.hash)
-				err = Exception("Hash invalid!")
-				data.clear()
-				return
-			}
-			cachedFile?.cachedLocation?.let {
-				if (destPath != it) {
-					// Delete old file if location changes
-					try {
-						Files.delete(cachedFile!!.cachedLocation!!.nioPath)
-					} catch (e: IOException) {
-						// Continue, as it was probably already deleted?
-						// TODO: log it
-					}
-				}
-			}
+		val expected = try {
+			metadata.linkedFile?.hash ?: metadata.getHashObj(index)
 		} catch (e: Exception) {
 			err = e
 			return
 		}
+		try {
+			install(packFolder, expected) { metadata.getSource(clientHolder) }
+		} catch (e: DownloadSourceException) {
+			failedDownloadHash = expected
+			err = e
+		} catch (e: Exception) {
+			err = e
+		}
+	}
 
-		// Update the manifest file
-		cachedFile = (cachedFile ?: ManifestFile.File()).also {
-			try {
-				it.hash = metadata.getHashObj(index)
-			} catch (e: Exception) {
-				err = e
-				return
-			}
-			it.isOptional = isOptional
-			it.cachedLocation = metadata.destURI.rebase(packFolder)
-			metadata.linkedFile?.let { linked ->
-				try {
-					it.linkedFileHash = linked.hash
-				} catch (e: Exception) {
-					err = e
+	val failedCurseForgeUpdate: CurseForgeUpdateData?
+		get() = if (failedDownloadHash != null) metadata.linkedFile?.update?.get("curseforge") as? CurseForgeUpdateData else null
+
+	fun manualDownload(packFolder: PackwizFilePath, cfPages: Map<Int, String>): ManualDownload? {
+		val hash = failedDownloadHash ?: return null
+		val linked = metadata.linkedFile
+		val filename = linked?.filename?.filename ?: metadata.file.filename
+		val cf = failedCurseForgeUpdate
+		val page = when {
+			cf != null -> cfPages[cf.projectId]?.let { "$it/files/${cf.fileId}" }
+				?: "https://www.curseforge.com/projects/${cf.projectId}"
+			linked?.download?.url is HttpUrlPath -> browserUrl(linked.download.url.toString())
+			!metadata.metafile && filename.endsWith(".jar", true) && metadata.file is HttpUrlPath -> metadata.file.toString()
+			else -> return null
+		}
+		return ManualDownload(name, filename, page, metadata.destURI.rebase(packFolder).nioPath.toAbsolutePath(), hash)
+	}
+
+	private fun browserUrl(downloadUrl: String): String {
+		val url = downloadUrl.toHttpUrl()
+		val segments = url.pathSegments
+		if (url.host == "cdn.modrinth.com" && segments.size >= 5 && segments[0] == "data" && segments[2] == "versions") {
+			return "https://modrinth.com/mod".toHttpUrl().newBuilder()
+				.addPathSegment(segments[1]).addPathSegment("version").addPathSegment(segments[3]).build().toString()
+		}
+		if (url.host == "github.com" && segments.size == 6 && segments[2] == "releases" && segments[3] == "download") {
+			return url.newBuilder().setPathSegment(3, "tag").removePathSegment(5).query(null).build().toString()
+		}
+		return downloadUrl
+	}
+
+	fun importManualFile(packFolder: PackwizFilePath, file: Path): Boolean {
+		val expected = failedDownloadHash ?: return false
+		try {
+			install(packFolder, expected) { Files.newInputStream(file).source() }
+		} catch (e: DownloadSourceException) {
+			// The browser may have replaced or removed the file since the directory scan.
+			return false
+		} catch (e: IOException) {
+			val failure = IOException("Could not install ${file.fileName} at ${metadata.destURI.rebase(packFolder)}: ${e.message}", e)
+			err = failure
+			throw failure
+		}
+		failedDownloadHash = null
+		err = null
+		return true
+	}
+
+	private class DownloadSourceException(message: String, cause: Exception? = null) : IOException(message, cause)
+	private inline fun <T> readSource(block: () -> T): T = try {
+		block()
+	} catch (e: Exception) {
+		throw DownloadSourceException(e.message ?: "Could not read download", e)
+	}
+
+	private fun install(packFolder: PackwizFilePath, expected: Hash<*>, openSource: () -> Source) {
+		val indexHash = metadata.getHashObj(index)
+		val destPath = metadata.destURI.rebase(packFolder)
+		val destination = destPath.nioPath.toAbsolutePath()
+		// createDirectories doesn't follow a final directory symlink on all platforms.
+		if (!Files.isDirectory(destination.parent)) Files.createDirectories(destination.parent)
+		val staged = Files.createTempFile(destination.parent, ".packwiz-", ".tmp")
+		try {
+			readSource(openSource).use { src ->
+				val fileSource = expected.type.source(src)
+				Files.newOutputStream(staged).sink().buffer().use { sink ->
+					val chunk = Buffer()
+					while (true) {
+						val count = readSource { fileSource.read(chunk, 64 * 1024L) }
+						if (count == -1L) break
+						sink.write(chunk, count)
+					}
+				}
+				if (fileSource.hash != expected) {
+					throw DownloadSourceException("Invalid ${expected.type} for ${destPath.filename}: expected ${expected.value}, got ${fileSource.hash.value}")
 				}
 			}
+			try {
+				Files.move(staged, destination, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+			} catch (e: AtomicMoveNotSupportedException) {
+				Files.move(staged, destination, StandardCopyOption.REPLACE_EXISTING)
+			}
+		} finally {
+			Files.deleteIfExists(staged)
 		}
 
+		cachedFile?.cachedLocation?.takeIf { it != destPath }?.let { previous ->
+			try {
+				Files.deleteIfExists(previous.nioPath)
+			} catch (e: IOException) {
+				Log.warn("Failed to remove previous version at $previous", e)
+			}
+		}
+		cachedFile = (cachedFile ?: ManifestFile.File()).also {
+			it.hash = indexHash
+			it.isOptional = isOptional
+			it.cachedLocation = destPath
+			it.linkedFileHash = metadata.linkedFile?.let { expected }
+		}
 		completionStatus = CompletionStatus.DOWNLOADED
 	}
 

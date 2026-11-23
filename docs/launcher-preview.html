@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Shinai Launcher</title>
+  <link rel="icon" type="image/png" href="assets/shinai-icon.png">
+  <style>
+    @font-face {
+      font-family: "Young Serif";
+      src: url("assets/YoungSerif-Regular.ttf") format("truetype");
+      font-display: swap;
+    }
+    :root {
+      color-scheme: light;
+      --pine: #192c2a;
+      --deep: #10211f;
+      --milk: #faf7e9;
+      --ink: #25332f;
+      --muted: #54625b;
+      --line: #c4cec5;
+      --paper: #fafbf7;
+      --green: #365d49;
+      --focus: #3984ac;
+      font: 16px/1.6 "Source Sans 3", "Segoe UI", "Yu Gothic UI", Meiryo, sans-serif;
+      color: var(--ink);
+      background: var(--pine);
+      text-underline-offset: .2em;
+    }
+    * { box-sizing: border-box; }
+    body, h1, h2, p { margin: 0; }
+    button, input { font: inherit; }
+    button { cursor: pointer; }
+    button:disabled { cursor: wait; opacity: .65; }
+    button:focus-visible, a:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+    ::selection { background: #ccddcb; color: #202c24; }
+    [hidden] { display: none !important; }
+
+    .launcher { min-height: 100vh; min-height: 100svh; display: flex; flex-direction: column; }
+    .toolbar, .statusbar { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding-inline: clamp(18px, 4.5vw, 80px); }
+    .toolbar { min-height: 52px; background: var(--deep); color: #f3f4e7; }
+    .brand { display: flex; align-items: center; gap: 10px; font-size: 16px; line-height: 1; }
+    .brand strong { font-weight: 750; }
+    .brand-name { color: #ced7ce; font-weight: 400; }
+    .brand-icon { display: block; flex: none; width: 32px; height: 32px; }
+    .settings-button { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 4px 8px; border: 0; border-radius: 3px; color: inherit; background: none; font-size: 14px; }
+    .settings-button:hover { background: #2b403c; }
+    .settings-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.55; }
+    .cover { flex: 1; isolation: isolate; position: relative; display: grid; align-items: end; min-height: min(650px, 72vh); color: var(--milk); background: var(--pine); }
+    .art { position: absolute; z-index: -2; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: 58% 51%; }
+    .cover::before { content: ""; position: absolute; z-index: -1; inset: 0; pointer-events: none; background: linear-gradient(0deg, rgb(9 23 23 / .84), rgb(9 23 23 / .3) 40%, transparent 76%), linear-gradient(90deg, rgb(9 23 23 / .64), transparent 66%); }
+    .cover-copy { width: min(100%, 75rem); padding: clamp(70px, 16vh, 180px) clamp(22px, 7vw, 115px) clamp(40px, 8vh, 100px); }
+    h1 { max-width: 11.7ch; font: 400 6rem/.99 "Young Serif", "Yu Mincho", Georgia, serif; letter-spacing: -.035em; text-wrap: balance; overflow-wrap: anywhere; }
+    .long-title { max-width: 18em; font-size: 3.7rem; line-height: 1.18; }
+    .subtitle { margin-top: 20px; max-width: 43em; font-size: 16px; line-height: 1.7; font-weight: 500; overflow-wrap: anywhere; text-shadow: 0 1px 5px #13201d; }
+    .launch { display: inline-flex; align-items: center; justify-content: center; gap: 13px; min-width: 160px; min-height: 47px; padding: 8px 23px; margin-top: 28px; border: 0; border-radius: 3px; color: var(--deep); background: var(--milk); font-size: 16px; font-weight: 700; }
+    .launch:hover { background: white; }
+    .launch:active { transform: translateY(1px); }
+    .triangle { width: 0; height: 0; border-block: 6px solid transparent; border-left: 9px solid currentColor; }
+    .toolbar :focus-visible, .cover :focus-visible { outline-color: #ffe7a7; }
+    .statusbar { min-height: 39px; background: var(--deep); color: #d8dfd4; font-size: 12px; }
+    .preview-note { white-space: nowrap; color: #bdc9bf; }
+
+    dialog { width: min(510px, calc(100% - 24px)); max-height: calc(100% - 24px); padding: 0; border: 0; border-radius: 4px; background: var(--paper); color: var(--ink); box-shadow: 0 9px 32px #10221f55; }
+    dialog::backdrop { background: #10201c99; }
+    .dialog-body { padding: 20px 22px; }
+    .dialog-body h2 { margin-bottom: 13px; font-size: 20px; font-weight: 650; line-height: 1.45; }
+    fieldset { border: 0; padding: 0 0 13px; margin: 0; min-width: 0; }
+    fieldset + fieldset { border-top: 1px solid var(--line); padding-top: 12px; }
+    legend { float: left; width: 100%; font-size: 15px; font-weight: 650; margin-bottom: 5px; }
+    fieldset label { display: flex; align-items: center; clear: both; gap: 7px; margin: 5px 0; font-size: 14px; }
+    input[type=radio], input[type=checkbox] { width: 16px; height: 16px; margin: 0; accent-color: var(--green); }
+    .path-field { display: flex; align-items: center; gap: 6px; margin: 8px 0 0 22px; }
+    #path { min-width: 0; width: 100%; padding: 7px; border: 1px solid #93a096; border-radius: 3px; background: white; color: var(--ink); font-size: 14px; caret-color: var(--green); }
+    .standard, .primary { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 5px 12px; border-radius: 3px; font-size: 14px; font-weight: 600; white-space: nowrap; }
+    .standard { border: 1px solid #a3aea4; background: #f2f5ef; color: var(--ink); }
+    .standard:hover { background: #e4ebdf; }
+    .primary { border: 1px solid var(--green); background: var(--green); color: white; }
+    .primary:hover, .page-link:hover { background: #284535; }
+    .dialog-footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 10px 16px; background: #edf1ea; border-top: 1px solid var(--line); }
+    .help, #scan-state { color: var(--muted); font-size: 13px; }
+    .folder-summary { color: var(--ink); overflow-wrap: anywhere; }
+    .text-button { padding: 4px 0; margin: 0; border: 0; color: var(--green); background: none; font-size: 13px; text-decoration: underline; text-underline-offset: .22em; }
+    .text-button:hover { color: #182d1f; }
+    .missing-list { list-style: none; margin: 14px 0 3px; padding: 0; }
+    .missing-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--line); padding: 12px 0; }
+    .missing-list strong { font-weight: 650; }
+    .file { display: block; font: 12px/1.5 Consolas, monospace; color: var(--muted); overflow-wrap: anywhere; }
+    .page-link { flex: none; display: inline-flex; align-items: center; gap: 5px; min-height: 34px; padding: 5px 10px; border-radius: 3px; color: white; background: var(--green); text-decoration: none; font-size: 13px; }
+    .page-link svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+    .found { white-space: nowrap; font-size: 13px; color: var(--green); }
+    .recovery-footer { align-items: center; justify-content: space-between; }
+    @media (max-width: 640px) {
+      .cover { min-height: 400px; }
+      .art { object-position: 62% 50%; }
+      .cover-copy { padding: 90px 24px 50px; }
+      h1 { font-size: 4rem; }
+      .long-title { font-size: 2.5rem; }
+      .subtitle { font-size: 14px; margin-top: 17px; }
+      .launch { margin-top: 22px; min-width: 145px; }
+      .dialog-body { padding: 16px; }
+    }
+    @media (max-width: 380px) {
+      h1 { font-size: 3.4rem; }
+      .long-title { font-size: 2rem; }
+      .missing-list li { align-items: start; flex-direction: column; gap: 4px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="launcher">
+    <header class="toolbar">
+      <div class="brand"><img class="brand-icon" src="assets/shinai-icon.png" width="32" height="32" alt=""><strong>Shinai <span class="brand-name">Launcher</span></strong></div>
+      <button type="button" class="settings-button" id="settings-button" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10 3-.6 2.2-1.5.9-2.2-.6-2 3.4 1.6 1.7v2.1l-1.6 1.7 2 3.5 2.2-.6 1.5.9.6 2.2h4l.6-2.2 1.5-.9 2.2.6 2-3.5-1.6-1.7v-2.1l1.6-1.7-2-3.4-2.2.6-1.5-.9L14 3Z"/><circle cx="12" cy="11.8" r="3"/></svg>設定</button>
+    </header>
+    <section class="cover" aria-labelledby="pack-name">
+      <img class="art" id="art" alt="" src="assets/evergreen-valley.jpg">
+      <div class="cover-copy">
+        <h1 id="pack-name">Shinai Launcher</h1>
+        <p class="subtitle" id="subtitle">森と渓谷を探索する、Forge の冒険パック。</p>
+        <button type="button" class="launch" id="launch"><span class="triangle" aria-hidden="true"></span>起動</button>
+      </div>
+    </section>
+    <footer class="statusbar"><p id="status" role="status">待機中</p><span class="preview-note">操作プレビュー</span></footer>
+  </main>
+
+  <dialog id="settings" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog">
+      <div class="dialog-body">
+        <h2 id="settings-title">設定</h2>
+        <fieldset>
+          <legend>手動取得した JAR の検索先</legend>
+          <label><input type="radio" name="location" value="default" checked>システムのダウンロードフォルダー</label>
+          <label><input type="radio" name="location" value="custom">フォルダーを指定</label>
+          <div class="path-field" id="path-field" hidden>
+            <input id="path" aria-label="検索するフォルダーのパス" placeholder="D:&#92;Minecraft&#92;Downloads" maxlength="500">
+            <button id="browse" type="button" class="standard" hidden>参照…</button>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend>サンプルパックの任意 MOD</legend>
+          <label><input type="checkbox" id="optional-mouse" checked>Mouse Tweaks をインストールする</label>
+        </fieldset>
+      </div>
+      <div class="dialog-footer"><button id="cancel-settings" class="standard" type="button">キャンセル</button><button class="primary" type="submit">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="recovery" aria-labelledby="recovery-title">
+    <div class="dialog-body">
+      <h2 id="recovery-title">起動に必要な MOD が不足しています</h2>
+      <p class="help">サンプル MOD の配布ページから JAR を取得し、<strong class="folder-summary" id="active-folder"></strong> に保存してください。<button id="recovery-settings" class="text-button" aria-haspopup="dialog">検索先の設定</button></p>
+      <ul class="missing-list" id="missing-list"></ul>
+      <button class="primary" type="button" id="open-missing">未取得の配布ページをすべて開く</button>
+      <p id="scan-state" role="status"></p>
+    </div>
+    <div class="dialog-footer recovery-footer"><button class="text-button" id="detect">JAR 検出を試す（デモ）</button><button class="standard" id="cancel-launch">起動を中止</button></div>
+  </dialog>
+
+  <template id="mod-row">
+    <li><div><strong></strong><span class="file"></span></div><a class="page-link" target="_blank" rel="noopener noreferrer">配布ページ<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 11 12 4M6 4h6v6"/></svg></a><span class="found" hidden>検出済み</span></li>
+  </template>
+  <script>
+    const byId = id => document.getElementById(id);
+    const launcherName = document.title;
+    const art = byId('art');
+
+    function relativeImagePath(path) {
+      if (typeof path !== 'string') return null;
+      const normalized = path.trim();
+      const parts = normalized.split('/').filter(part => part !== '.');
+      if (!/\.(?:jpe?g|png)$/i.test(normalized) || parts.some(part => !part || part === '..' || /[\\:%?#\u0000-\u001f]/.test(part))) return null;
+      return parts.map(encodeURIComponent).join('/');
+    }
+
+    async function loadPackConfig() {
+      try {
+        const response = await fetch('packwiz-launcher.json', { cache: 'no-store', mode: 'same-origin' });
+        if (!response.ok) return;
+        const config = await response.json();
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return;
+
+        const title = typeof config.title === 'string' && config.title.trim() ? config.title.trim() : launcherName;
+        const subtitle = typeof config.subtitle === 'string' ? config.subtitle.trim() : '';
+        byId('pack-name').textContent = title;
+        byId('pack-name').classList.toggle('long-title', Array.from(title).length > 32);
+        document.title = title === launcherName ? launcherName : title + ' | ' + launcherName;
+        byId('subtitle').textContent = subtitle;
+        byId('subtitle').hidden = !subtitle;
+
+        const background = relativeImagePath(config.background);
+        art.hidden = !background;
+        if (background) art.src = background;
+        else art.removeAttribute('src');
+      } catch (error) {
+        console.warn('Could not read packwiz-launcher.json', error);
+      }
+    }
+
+    art.addEventListener('error', () => { art.hidden = true; });
+    if (location.protocol === 'http:' || location.protocol === 'https:') loadPackConfig();
+
+    const defaults = { customFolder: false, path: '', optionalMouse: true };
+    const storageKey = 'packwiz-launcher-preview.settings.v1';
+    function readSettings() {
+      try {
+        const saved = JSON.parse(localStorage.getItem(storageKey));
+        if (!saved || typeof saved !== 'object') return { ...defaults };
+        const path = typeof saved.path === 'string' ? saved.path.trim().slice(0, 500) : '';
+        return {
+          customFolder: saved.customFolder === true && path.length > 0,
+          path,
+          optionalMouse: saved.optionalMouse !== false
+        };
+      } catch {
+        return { ...defaults };
+      }
+    }
+
+    const settings = byId('settings');
+    const settingsForm = byId('settings-form');
+    const locationChoice = settingsForm.elements.location;
+    const pathInput = byId('path');
+    let preferences = readSettings();
+    function showLocationField() {
+      const custom = locationChoice.value === 'custom';
+      byId('path-field').hidden = !custom;
+      pathInput.disabled = !custom;
+      pathInput.required = custom;
+    }
+    function openSettings() {
+      locationChoice.value = preferences.customFolder ? 'custom' : 'default';
+      pathInput.value = preferences.path;
+      pathInput.setCustomValidity('');
+      byId('optional-mouse').checked = preferences.optionalMouse;
+      showLocationField();
+      settings.showModal();
+    }
+    byId('settings-button').addEventListener('click', openSettings);
+    byId('recovery-settings').addEventListener('click', openSettings);
+    for (const input of locationChoice) input.addEventListener('change', showLocationField);
+    pathInput.addEventListener('input', () => pathInput.setCustomValidity(''));
+    byId('browse').hidden = typeof window.showDirectoryPicker !== 'function';
+    byId('browse').addEventListener('click', async () => {
+      try {
+        const handle = await window.showDirectoryPicker({ mode: 'read' });
+        // Browsers expose a directory name, not its absolute path.
+        pathInput.value = handle.name;
+        pathInput.setCustomValidity('');
+      } catch (error) {
+        if (error.name !== 'AbortError') pathInput.focus();
+      }
+    });
+    byId('cancel-settings').addEventListener('click', () => settings.close());
+    settingsForm.addEventListener('submit', event => {
+      event.preventDefault();
+      const path = pathInput.value.trim();
+      if (locationChoice.value === 'custom' && !path) {
+        pathInput.setCustomValidity('フォルダーを入力してください。');
+        pathInput.reportValidity();
+        return;
+      }
+      preferences = { customFolder: locationChoice.value === 'custom', path, optionalMouse: byId('optional-mouse').checked };
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(preferences));
+        byId('status').textContent = '設定を保存しました';
+      } catch {
+        byId('status').textContent = '設定をこの画面に適用しました';
+      }
+      settings.close();
+      if (recovery.open) {
+        missing = neededMods().filter(mod => !available.has(mod.file) || missing.includes(mod));
+        if (missing.every(mod => available.has(mod.file))) {
+          finishLaunch();
+        } else {
+          renderMissing();
+          status.textContent = '手動取得した JAR を待っています';
+        }
+      }
+    });
+
+    const mods = [
+      { name: 'JourneyMap', file: 'journeymap-1.20.1-5.10.0-forge.jar', url: 'https://www.curseforge.com/minecraft/mc-mods/journeymap/files/5458344' },
+      { name: 'Mouse Tweaks', file: 'MouseTweaks-forge-mc1.20.1-2.25.1.jar', url: 'https://www.curseforge.com/minecraft/mc-mods/mouse-tweaks/files/5338457', optional: true }
+    ];
+    // Simulated local files last for this page session. Reload to replay the first launch.
+    const available = new Set();
+    const recovery = byId('recovery');
+    const launch = byId('launch');
+    const status = byId('status');
+    let missing = [];
+    function neededMods() {
+      return mods.filter(mod => !mod.optional || preferences.optionalMouse);
+    }
+    function setLaunching(busy) {
+      launch.disabled = busy;
+      byId('settings-button').disabled = busy;
+    }
+    function finishLaunch() {
+      if (recovery.open) recovery.close();
+      status.textContent = 'packwiz のインストールを再開しました（デモ）';
+      setLaunching(false);
+      launch.focus();
+    }
+    function cancelLaunch() {
+      recovery.close();
+      status.textContent = '起動を中止しました';
+      setLaunching(false);
+      launch.focus();
+    }
+    function renderMissing() {
+      byId('active-folder').textContent = preferences.customFolder ? preferences.path : 'ダウンロードフォルダー';
+      const list = byId('missing-list');
+      list.replaceChildren();
+      for (const mod of missing) {
+        const row = byId('mod-row').content.cloneNode(true);
+        row.querySelector('strong').textContent = mod.name;
+        row.querySelector('.file').textContent = mod.file;
+        const page = row.querySelector('a');
+        page.href = mod.url;
+        page.setAttribute('aria-label', mod.name + ' の配布ページを開く');
+        page.hidden = available.has(mod.file);
+        row.querySelector('.found').hidden = !page.hidden;
+        list.append(row);
+      }
+      const found = missing.filter(mod => available.has(mod.file)).length;
+      byId('scan-state').textContent = '検出済み ' + found + ' / ' + missing.length + ' 件';
+    }
+    launch.addEventListener('click', () => {
+      setLaunching(true);
+      status.textContent = '起動前にファイルを確認しています…';
+      window.setTimeout(() => {
+        missing = neededMods().filter(mod => !available.has(mod.file));
+        if (!missing.length) {
+          finishLaunch();
+          return;
+        }
+        renderMissing();
+        status.textContent = '手動取得した JAR を待っています';
+        recovery.showModal();
+      }, 360);
+    });
+    byId('open-missing').addEventListener('click', () => {
+      for (const page of byId('missing-list').querySelectorAll('a:not([hidden])')) page.click();
+    });
+    byId('detect').addEventListener('click', () => {
+      const next = missing.find(mod => !available.has(mod.file));
+      if (next) available.add(next.file);
+      if (missing.every(mod => available.has(mod.file))) finishLaunch();
+      else renderMissing();
+    });
+    byId('cancel-launch').addEventListener('click', cancelLaunch);
+    recovery.addEventListener('cancel', event => {
+      event.preventDefault();
+      cancelLaunch();
+    });
+  </script>
+</body>
+</html>

@@ -7,19 +7,20 @@ import link.infra.packwiz.installer.target.path.HttpUrlPath
 import link.infra.packwiz.installer.target.path.PackwizFilePath
 import link.infra.packwiz.installer.ui.cli.CLIHandler
 import link.infra.packwiz.installer.ui.gui.GUIHandler
+import link.infra.packwiz.installer.ui.gui.LauncherIdentity
 import link.infra.packwiz.installer.ui.wrap
 import link.infra.packwiz.installer.util.Log
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okio.Path.Companion.toOkioPath
 import okio.Path.Companion.toPath
 import org.apache.commons.cli.DefaultParser
+import org.apache.commons.cli.HelpFormatter
 import org.apache.commons.cli.Options
 import org.apache.commons.cli.ParseException
 import java.awt.EventQueue
 import java.awt.GraphicsEnvironment
 import java.net.URI
 import java.nio.file.Paths
-import javax.swing.JOptionPane
 import javax.swing.UIManager
 import kotlin.system.exitProcess
 
@@ -45,8 +46,7 @@ class Main(args: Array<String>) {
 					} catch (ignored: Exception) {
 						// Ignore the exceptions, just continue using the ugly L&F
 					}
-					JOptionPane.showMessageDialog(null, "Failed to parse command line arguments: $e",
-						"packwiz-installer", JOptionPane.ERROR_MESSAGE)
+					LauncherIdentity.showStartupError("Failed to parse command line arguments: $e")
 				}
 			}
 			exitProcess(1)
@@ -54,6 +54,10 @@ class Main(args: Array<String>) {
 
 		if (guiEnabled && cmd.hasOption("no-gui")) {
 			guiEnabled = false
+		}
+		if (cmd.hasOption("help")) {
+			HelpFormatter().printHelp("java -jar packwiz-installer.jar [options] <pack.toml path or URL>", options)
+			return
 		}
 
 		val ui = if (guiEnabled) GUIHandler() else CLIHandler()
@@ -89,7 +93,10 @@ class Main(args: Array<String>) {
 			// Other URIs (unsupported)
 			Regex("^[a-z][a-z\\d+\\-.]*://", RegexOption.IGNORE_CASE).containsMatchIn(packFileRaw) -> ui.showErrorAndExit("Unsupported scheme for pack file: $packFileRaw")
 			// None of the above matches -> interpret as file path
-			else -> PackwizFilePath(packFileRaw.toPath().parent ?: ui.showErrorAndExit("Invalid pack file path: $packFileRaw"), packFileRaw.toPath().name)
+			else -> ui.wrap("Invalid pack file path: $packFileRaw") {
+				val path = Paths.get(packFileRaw).toAbsolutePath().normalize().toOkioPath()
+				PackwizFilePath(requireNotNull(path.parent), path.name)
+			}
 		}
 		val side = cmd.getOptionValue("side")?.let {
 			Side.from(it) ?: ui.showErrorAndExit("Unknown side name: $it")
@@ -98,7 +105,8 @@ class Main(args: Array<String>) {
 			cmd.getOptionValue("pack-folder")?.let{ PackwizFilePath(it.toPath()) } ?: PackwizFilePath(".".toPath())
 		}
 		val multimcFolder = ui.wrap("Invalid MultiMC folder path") {
-			cmd.getOptionValue("multimc-folder")?.let{ PackwizFilePath(it.toPath()) } ?: PackwizFilePath("..".toPath())
+			cmd.getOptionValue("multimc-folder")?.let { PackwizFilePath(it.toPath()) }
+				?: PackwizFilePath(packFolder.nioPath.toAbsolutePath().resolve("..").normalize().toOkioPath())
 		}
 		val manifestFile = ui.wrap("Invalid manifest file path") {
 			packFolder / (cmd.getOptionValue("meta-file") ?: "packwiz.json")
@@ -123,7 +131,7 @@ class Main(args: Array<String>) {
 		fun addNonBootstrapOptions(options: Options) {
 			options.addOption("s", "side", true, "Side to install mods from (client/server, defaults to client)")
 			options.addOption(null, "title", true, "Title of the installer window")
-			options.addOption(null, "pack-folder", true, "Folder to install the pack to (defaults to the JAR directory)")
+			options.addOption(null, "pack-folder", true, "Folder to install the pack to (defaults to the working directory when a pack is specified)")
 			options.addOption(null, "multimc-folder", true, "The MultiMC pack folder (defaults to the parent of the pack directory)")
 			options.addOption(null, "meta-file", true, "JSON file to store pack metadata, relative to the pack folder (defaults to packwiz.json)")
 			options.addOption("t", "timeout", true, "Seconds to wait before automatically launching when asking about optional mods (defaults to 10)")
@@ -137,7 +145,7 @@ class Main(args: Array<String>) {
 			options.addOption(null, "bootstrap-no-update", false, "Don't update packwiz-installer")
 			options.addOption(null, "bootstrap-main-jar", true, "Location of the packwiz-installer JAR file")
 			options.addOption("g", "no-gui", false, "Don't display a GUI to show update progress")
-			options.addOption("h", "help", false, "Display this message") // Implemented in packwiz-installer-bootstrap!
+			options.addOption("h", "help", false, "Display this message")
 		}
 
 		@JvmStatic
@@ -147,7 +155,6 @@ class Main(args: Array<String>) {
 		}
 	}
 
-	// Actual main() is in RequiresBootstrap!
 	init {
 		// Big overarching try/catch just in case everything breaks
 		try {
@@ -156,9 +163,7 @@ class Main(args: Array<String>) {
 			Log.fatal("Error from main", e)
 			if (guiEnabled) {
 				EventQueue.invokeLater {
-					JOptionPane.showMessageDialog(null,
-						"A fatal error occurred: \n$e",
-						"packwiz-installer", JOptionPane.ERROR_MESSAGE)
+					LauncherIdentity.showStartupError("A fatal error occurred: \n$e")
 					exitProcess(1)
 				}
 				// In case the EventQueue is broken, exit after 1 minute

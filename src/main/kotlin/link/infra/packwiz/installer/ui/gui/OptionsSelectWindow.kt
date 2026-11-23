@@ -14,7 +14,7 @@ import javax.swing.border.EmptyBorder
 import javax.swing.event.TableModelListener
 import javax.swing.table.TableModel
 
-class OptionsSelectWindow internal constructor(optList: List<IOptionDetails>, future: CompletableFuture<Boolean>, parentWindow: JFrame?) : JDialog(parentWindow, "Select optional mods...", true), ActionListener {
+class OptionsSelectWindow internal constructor(optList: List<IOptionDetails>, future: CompletableFuture<Boolean>, parentWindow: JFrame?) : JDialog(parentWindow, "任意 MOD", true), ActionListener {
 	private val lblOptionDescription: JTextArea
 	private val tableModel: OptionTableModel
 	private val future: CompletableFuture<Boolean>
@@ -33,7 +33,7 @@ class OptionsSelectWindow internal constructor(optList: List<IOptionDetails>, fu
 		override fun getRowCount() = opts.size
 		override fun getColumnCount() = 2
 
-		private val columnNames = arrayOf("Enabled", "Mod name")
+		private val columnNames = arrayOf("有効", "MOD 名")
 		private val columnTypes = arrayOf(Boolean::class.javaObjectType, String::class.java)
 		private val columnEditables = booleanArrayOf(true, false)
 
@@ -96,7 +96,7 @@ class OptionsSelectWindow internal constructor(optList: List<IOptionDetails>, fu
 				add(JSplitPane().apply {
 					resizeWeight = 0.5
 
-					lblOptionDescription = JTextArea("Select an option...").apply {
+					lblOptionDescription = JTextArea("MOD を選ぶと説明が表示されます。").apply {
 						background = UIManager.getColor("List.background")
 						isOpaque = true
 						wrapStyleWord = true
@@ -122,7 +122,7 @@ class OptionsSelectWindow internal constructor(optList: List<IOptionDetails>, fu
 							if (i > -1) {
 								lblOptionDescription.text = tableModel.getDescription(i)
 							} else {
-								lblOptionDescription.text = "Select an option..."
+								lblOptionDescription.text = "MOD を選ぶと説明が表示されます。"
 							}
 						}
 						tableHeader = null
@@ -137,14 +137,14 @@ class OptionsSelectWindow internal constructor(optList: List<IOptionDetails>, fu
 				add(JPanel().apply {
 					layout = FlowLayout(FlowLayout.RIGHT)
 
-					add(JButton("OK").apply {
+					add(JButton("保存").apply {
 						actionCommand = "OK"
 						addActionListener(this@OptionsSelectWindow)
 
 						this@OptionsSelectWindow.rootPane.defaultButton = this
 					})
 
-					add(JButton("Cancel").apply {
+					add(JButton("キャンセル").apply {
 						actionCommand = "Cancel"
 						addActionListener(this@OptionsSelectWindow)
 					})

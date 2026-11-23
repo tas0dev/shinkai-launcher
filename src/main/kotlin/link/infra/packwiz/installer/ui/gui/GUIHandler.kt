@@ -1,50 +1,61 @@
 package link.infra.packwiz.installer.ui.gui
 
+import link.infra.packwiz.installer.ui.DownloadDirectories
 import link.infra.packwiz.installer.ui.IUserInterface
 import link.infra.packwiz.installer.ui.IUserInterface.ExceptionListResult
 import link.infra.packwiz.installer.ui.data.ExceptionDetails
 import link.infra.packwiz.installer.ui.data.IOptionDetails
 import link.infra.packwiz.installer.ui.data.InstallProgress
+import link.infra.packwiz.installer.ui.data.LauncherBranding
+import link.infra.packwiz.installer.ui.data.ManualDownload
 import link.infra.packwiz.installer.util.Log
 import java.awt.EventQueue
+import java.io.IOException
+import java.nio.file.Path
 import java.util.Timer
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
 import javax.swing.JDialog
 import javax.swing.JOptionPane
+import javax.swing.SwingWorker
 import javax.swing.UIManager
 import kotlin.concurrent.timer
 import kotlin.system.exitProcess
 
 class GUIHandler : IUserInterface {
 	private lateinit var frmPackwizlauncher: InstallWindow
+	private var brandingWorker: SwingWorker<LauncherBranding, Void>? = null
 
 	@Volatile
 	override var optionsButtonPressed = false
 		set(value) {
-			optionalSelectedLatch.countDown()
 			field = value
+			optionalSelectedLatch.countDown()
 		}
 	@Volatile
 	override var cancelButtonPressed = false
 		set(value) {
-			optionalSelectedLatch.countDown()
 			field = value
+			optionalSelectedLatch.countDown()
 			cancelCallback?.invoke()
 		}
 	@Volatile
 	override var cancelCallback: (() -> Unit)? = null
 	var okButtonPressed = false
 		set(value) {
-			optionalSelectedLatch.countDown()
 			field = value
+			optionalSelectedLatch.countDown()
 		}
 	@Volatile
 	override var firstInstall = false
 
-	override var title = "packwiz-installer"
+	@Volatile private var explicitTitle: String? = null
+	@Volatile private var packTitle = LauncherIdentity.NAME
+	override var title: String
+		get() = explicitTitle ?: packTitle
 		set(value) {
-			field = value
+			explicitTitle = value
 			EventQueue.invokeLater { frmPackwizlauncher.title = value }
 		}
 
@@ -69,43 +80,51 @@ class GUIHandler : IUserInterface {
 		visibleCountdownLatch.countDown()
 	}
 
-	override fun dispose() = EventQueue.invokeAndWait {
+	override fun dispose() = frmPackwizlauncher.afterSettingsClose {
+		brandingWorker?.cancel(true)
 		frmPackwizlauncher.dispose()
+	}
+
+	override fun showPackBranding(packName: String, load: () -> LauncherBranding) = EventQueue.invokeLater {
+		if (!frmPackwizlauncher.isDisplayable) return@invokeLater
+		brandingWorker?.cancel(true)
+		applyBranding(LauncherBranding(packName))
+		val worker = object : SwingWorker<LauncherBranding, Void>() {
+			override fun doInBackground() = load()
+
+			override fun done() {
+				if (isCancelled || brandingWorker !== this || !frmPackwizlauncher.isDisplayable) return
+				try {
+					applyBranding(get())
+				} catch (e: ExecutionException) {
+					Log.warn("Failed to load launcher branding", e)
+				} finally {
+					brandingWorker = null
+				}
+			}
+		}
+		brandingWorker = worker
+		worker.execute()
+	}
+
+	private fun applyBranding(branding: LauncherBranding) {
+		packTitle = if (branding.title == LauncherIdentity.NAME) LauncherIdentity.NAME else "${branding.title} | ${LauncherIdentity.NAME}"
+		frmPackwizlauncher.title = title
+		frmPackwizlauncher.setBranding(branding)
 	}
 
 	override fun showErrorAndExit(message: String, e: Exception?): Nothing {
 		val buttons = arrayOf("Quit", if (firstInstall) "Continue without installing" else "Continue without updating")
-		if (e != null) {
-			Log.fatal(message, e)
-			EventQueue.invokeAndWait {
-				val result = JOptionPane.showOptionDialog(frmPackwizlauncher,
-					"$message: $e",
-					title,
-					JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE, null, buttons, buttons[0])
-				if (result == 1) {
-					Log.info("User selected to continue without installing/updating, exiting with code 0...")
-					exitProcess(0)
-				} else {
-					Log.info("User selected to quit, exiting with code 1...")
-					exitProcess(1)
-				}
-			}
-		} else {
-			Log.fatal(message)
-			EventQueue.invokeAndWait {
-				val result = JOptionPane.showOptionDialog(frmPackwizlauncher,
-					message,
-					title,
-					JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE, null, buttons, buttons[0])
-				if (result == 1) {
-					Log.info("User selected to continue without installing/updating, exiting with code 0...")
-					exitProcess(0)
-				} else {
-					Log.info("User selected to quit, exiting with code 1...")
-					exitProcess(1)
-				}
-			}
+		if (e == null) Log.fatal(message) else Log.fatal(message, e)
+		val result = frmPackwizlauncher.afterSettingsClose {
+			JOptionPane.showOptionDialog(frmPackwizlauncher, if (e == null) message else "$message: $e",
+				title, JOptionPane.YES_NO_OPTION, JOptionPane.ERROR_MESSAGE, null, buttons, buttons[0])
 		}
+		if (result == 1) {
+			Log.info("User selected to continue without installing/updating, exiting with code 0...")
+			exitProcess(0)
+		}
+		Log.info("User selected to quit, exiting with code 1...")
 		exitProcess(1)
 	}
 
@@ -127,11 +146,11 @@ class GUIHandler : IUserInterface {
 
 	override fun showOptions(options: List<IOptionDetails>): Boolean {
 		val future = CompletableFuture<Boolean>()
-		EventQueue.invokeAndWait {
+		frmPackwizlauncher.afterSettingsClose {
 			if (options.isEmpty()) {
-				JOptionPane.showMessageDialog(null,
-					"This modpack has no optional mods!",
-					"Optional mods", JOptionPane.INFORMATION_MESSAGE)
+				JOptionPane.showMessageDialog(frmPackwizlauncher,
+					"このパックには任意 MOD がありません。",
+					"任意 MOD", JOptionPane.INFORMATION_MESSAGE)
 				future.complete(false)
 			} else {
 				OptionsSelectWindow(options, future, frmPackwizlauncher).apply {
@@ -145,7 +164,7 @@ class GUIHandler : IUserInterface {
 
 	override fun showExceptions(exceptions: List<ExceptionDetails>, numTotal: Int, allowsIgnore: Boolean): ExceptionListResult {
 		val future = CompletableFuture<ExceptionListResult>()
-		EventQueue.invokeLater {
+		frmPackwizlauncher.afterSettingsClose {
 			ExceptionListWindow(exceptions, future, numTotal, allowsIgnore, frmPackwizlauncher).apply {
 				defaultCloseOperation = JDialog.DISPOSE_ON_CLOSE
 				isVisible = true
@@ -154,19 +173,40 @@ class GUIHandler : IUserInterface {
 		return future.get()
 	}
 
+	override fun showManualDownloads(downloads: List<ManualDownload>, scan: (Path) -> Set<ManualDownload>): Boolean {
+		val initialFolder = frmPackwizlauncher.afterSettingsClose { DownloadDirectories.customDirectory() }
+			?: DownloadDirectories.defaultDirectory()
+		val installed = try {
+			scan(initialFolder)
+		} catch (e: IOException) {
+			emptySet()
+		}
+		val missing = downloads.filterNot { it in installed }
+		if (missing.isEmpty()) return true
+
+		val systemFolder = DownloadDirectories.defaultDirectory()
+		val window = frmPackwizlauncher.afterSettingsClose {
+			val folder = DownloadDirectories.customDirectory() ?: systemFolder
+			ManualDownloadWindow(frmPackwizlauncher, missing, folder, systemFolder).also { dialog ->
+				EventQueue.invokeLater { dialog.isVisible = true }
+			}
+		}
+		return window.awaitDownloads { folder -> scan(folder) }
+	}
+
 	override fun disableOptionsButton(hasOptions: Boolean) = EventQueue.invokeLater {
 		frmPackwizlauncher.disableOptionsButton(hasOptions)
 	}
 
 	override fun showCancellationDialog(): IUserInterface.CancellationResult {
 		val future = CompletableFuture<IUserInterface.CancellationResult>()
-		EventQueue.invokeLater {
-			val buttons = arrayOf("Quit", "Ignore")
+		frmPackwizlauncher.afterSettingsClose {
+			val buttons = arrayOf("起動を中止", "更新をスキップして起動")
 			val result = JOptionPane.showOptionDialog(frmPackwizlauncher,
-					"The installation was cancelled. Would you like to quit the game, or ignore the update and start the game?",
-					"Cancelled installation",
+					"インストールを中断しました。このままゲームの起動も中止しますか？",
+					"インストールの中断",
 					JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE, null, buttons, buttons[0])
-			future.complete(if (result == 0) IUserInterface.CancellationResult.QUIT else IUserInterface.CancellationResult.CONTINUE)
+			future.complete(if (result == 1) IUserInterface.CancellationResult.CONTINUE else IUserInterface.CancellationResult.QUIT)
 		}
 		return future.get()
 	}
@@ -174,7 +214,7 @@ class GUIHandler : IUserInterface {
 	override fun showUpdateConfirmationDialog(oldVersions: List<Pair<String, String?>>, newVersions: List<Pair<String, String?>>): IUserInterface.UpdateConfirmationResult {
 		assert(newVersions.isNotEmpty())
 		val future = CompletableFuture<IUserInterface.UpdateConfirmationResult>()
-		EventQueue.invokeLater {
+		frmPackwizlauncher.afterSettingsClose {
 			val oldVersIndex = oldVersions.map { it.first to it.second }.toMap()
 			val newVersIndex = newVersions.map { it.first to it.second }.toMap()
 			val message = StringBuilder()
@@ -232,11 +272,13 @@ class GUIHandler : IUserInterface {
 		if (timeout >= 0) {
 			var count = 0
 			closeTimer = timer("timeout", true, 0, 1000) {
+				if (frmPackwizlauncher.settingsOpen) return@timer
 				if (count >= timeout) {
 					optionalSelectedLatch.countDown()
 					cancel()
 				} else {
-					frmPackwizlauncher.timeoutOk(timeout - count)
+					val remaining = timeout - count
+					EventQueue.invokeLater { frmPackwizlauncher.timeoutOk(remaining) }
 					count += 1
 				}
 			};
