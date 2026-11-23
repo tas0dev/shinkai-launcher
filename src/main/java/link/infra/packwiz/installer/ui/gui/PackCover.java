@@ -4,6 +4,7 @@ import link.infra.packwiz.installer.ui.data.LauncherBranding;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
+import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.UIManager;
@@ -14,12 +15,13 @@ import java.awt.FontFormatException;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Image;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 
-/** A compact edition of the pack cover for the missing-mod dialog. */
+/** Artwork and pack information shared by the home screen and the missing-mod dialog. */
 final class PackCover extends JPanel {
 	private static final Color PAPER = new Color(250, 247, 233);
 	private static final Font DISPLAY_FONT = loadDisplayFont();
@@ -27,17 +29,24 @@ final class PackCover extends JPanel {
 
 	private final JTextArea title = textArea("パック名");
 	private final JTextArea subtitle = textArea("パックの説明");
-	private BufferedImage artwork = DEFAULT_ART;
+	private final JButton launch;
+	private Image artwork = DEFAULT_ART;
 	private Font titleFamily = DISPLAY_FONT;
 	private int layoutWidth = -1;
 	private int layoutHeight;
 
 	PackCover(LauncherBranding branding) {
+		this(branding, null);
+	}
+
+	PackCover(LauncherBranding branding, JButton launch) {
 		super(null);
+		this.launch = launch;
 		setBackground(new Color(25, 44, 42));
-		setPreferredSize(new Dimension(400, 150));
+		setPreferredSize(launch == null ? new Dimension(400, 150) : new Dimension(1000, 550));
 		add(title);
 		add(subtitle);
+		if (launch != null) add(launch);
 		setBranding(branding);
 	}
 
@@ -95,30 +104,38 @@ final class PackCover extends JPanel {
 		if (layoutWidth == width && layoutHeight == height) return;
 		layoutWidth = width;
 		layoutHeight = height;
-		int inset = 22;
+		boolean home = launch != null;
+		int inset = home ? Math.max(24, (int) (width * .07)) : 22;
 		int contentWidth = Math.max(1, width - 2 * inset);
-		int bottom = height - 15;
+		int bottom = height - (home ? Math.max(26, height / 11) : 15);
+		if (home) {
+			launch.setBounds(inset, bottom - 47, 160, 47);
+			bottom -= 69;
+		}
 		if (subtitle.isVisible()) {
-			subtitle.setFont(UIManager.getFont("Label.font").deriveFont(14f));
-			subtitle.setSize(contentWidth, 1);
+			int subtitleWidth = home ? Math.min(contentWidth, 620) : contentWidth;
+			subtitle.setFont(UIManager.getFont("Label.font").deriveFont(home ? 16f : 14f));
+			subtitle.setSize(subtitleWidth, 1);
 			int linesHeight = Math.min(subtitle.getPreferredSize().height, height / 3);
 			bottom -= linesHeight;
-			subtitle.setBounds(inset, bottom, contentWidth, linesHeight);
-			bottom -= 4;
+			subtitle.setBounds(inset, bottom, subtitleWidth, linesHeight);
+			bottom -= home ? 14 : 4;
 		}
 
 		int available = Math.max(20, bottom - 8);
-		int size = 38;
+		boolean longTitle = title.getText().codePointCount(0, title.getText().length()) > 32;
+		int size = home ? Math.min(longTitle ? 59 : 96, Math.max(40, width / 10)) : 38;
+		int titleWidth = home ? Math.min(contentWidth, longTitle ? 880 : size * 6) : contentWidth;
 		int titleHeight;
 		do {
 			title.setFont(titleFamily.deriveFont((float) size));
-			title.setSize(contentWidth, 1);
+			title.setSize(titleWidth, 1);
 			titleHeight = title.getPreferredSize().height;
 			if (titleHeight <= available || size <= 18) break;
 			size -= 4;
 		} while (true);
 		titleHeight = Math.min(titleHeight, available);
-		title.setBounds(inset, bottom - titleHeight, contentWidth, titleHeight);
+		title.setBounds(inset, bottom - titleHeight, titleWidth, titleHeight);
 	}
 
 	@Override
@@ -138,14 +155,17 @@ final class PackCover extends JPanel {
 		int width = getWidth();
 		int height = getHeight();
 		if (artwork == null || width <= 0 || height <= 0) return;
+		int imageWidth = artwork.getWidth(this);
+		int imageHeight = artwork.getHeight(this);
+		if (imageWidth <= 0 || imageHeight <= 0) return;
 		Graphics2D g = (Graphics2D) graphics.create();
 		try {
-			double scale = Math.max((double) width / artwork.getWidth(), (double) height / artwork.getHeight());
-			int scaledWidth = (int) Math.ceil(artwork.getWidth() * scale);
-			int scaledHeight = (int) Math.ceil(artwork.getHeight() * scale);
+			double scale = Math.max((double) width / imageWidth, (double) height / imageHeight);
+			int scaledWidth = (int) Math.ceil(imageWidth * scale);
+			int scaledHeight = (int) Math.ceil(imageHeight * scale);
 			g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 			g.drawImage(artwork, (int) ((width - scaledWidth) * .58), (int) ((height - scaledHeight) * .51),
-					scaledWidth, scaledHeight, null);
+					scaledWidth, scaledHeight, this);
 			g.setPaint(new GradientPaint(0f, 0f, new Color(9, 23, 23, 170), width, 0f, new Color(9, 23, 23, 65)));
 			g.fillRect(0, 0, width, height);
 			g.setPaint(new GradientPaint(0f, 0f, new Color(9, 23, 23, 15), 0f, height, new Color(9, 23, 23, 205)));

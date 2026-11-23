@@ -99,7 +99,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 				ui.showErrorAndExit("Failed to parse pack.toml", e)
 			}
 		}
-		ui.showPackBranding(pf.name) { loadLauncherBranding(opts.packFile, pf.name, clientHolder) }
+		ui.setPackName(pf.name)
 
 		if (ui.cancelButtonPressed) {
 			showCancellationDialog()
@@ -227,7 +227,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			ui.showErrorAndExit("Failed to download index file", e)
 		}
 
-		val indexFile = try {
+		val publishedIndex = try {
 			IndexFile.mapper(indexUri).decode<IndexFile>(indexFileSource.buffer().inputStream())
 		} catch (e: IllegalStateException) {
 			ui.showErrorAndExit("Failed to parse index file", e)
@@ -235,6 +235,12 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		if (indexHash != indexFileSource.hash) {
 			ui.showErrorAndExit("Your index file hash is invalid! The pack developer should packwiz refresh on the pack again")
 		}
+		// A previous release may have indexed the launcher config. Ownership is now local.
+		val localConfig = opts.packFolder / LAUNCHER_CONFIG_NAME
+		manifest.cachedFiles.entries.removeAll { (path, file) -> path == localConfig || file.cachedLocation == localConfig }
+		val indexFile = publishedIndex.copy(files = publishedIndex.files.filter {
+			it.file.rebase(opts.packFolder) != localConfig && it.alias?.rebase(opts.packFolder) != localConfig
+		})
 
 		if (ui.cancelButtonPressed) {
 			showCancellationDialog()

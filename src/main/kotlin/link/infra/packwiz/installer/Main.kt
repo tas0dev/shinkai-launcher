@@ -115,6 +115,14 @@ class Main(args: Array<String>) {
 			cmd.getOptionValue("timeout")?.toLong() ?: 10
 		}
 
+		if (ui is GUIHandler) {
+			ui.loadHomeBranding { loadLauncherBranding(packFolder.nioPath) }
+			if (!ui.awaitLaunch()) {
+				ui.dispose()
+				exitProcess(1)
+			}
+		}
+
 		// Start update process!
 		try {
 			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout), ui)

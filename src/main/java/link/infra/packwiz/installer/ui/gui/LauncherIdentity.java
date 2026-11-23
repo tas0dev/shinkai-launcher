@@ -7,7 +7,7 @@ import java.awt.Image;
 import java.net.URL;
 
 public final class LauncherIdentity {
-	public static final String NAME = "Shinai Launcher";
+	public static final String NAME = "Shinkai Launcher";
 	public static final Image ICON = loadIcon();
 
 	private LauncherIdentity() {}

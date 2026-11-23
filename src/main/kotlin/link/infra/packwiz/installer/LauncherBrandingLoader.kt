@@ -2,42 +2,60 @@ package link.infra.packwiz.installer
 
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import link.infra.packwiz.installer.target.ClientHolder
-import link.infra.packwiz.installer.target.path.HttpUrlPath
-import link.infra.packwiz.installer.target.path.PackwizFilePath
-import link.infra.packwiz.installer.target.path.PackwizPath
+import link.infra.packwiz.installer.ui.gui.LauncherIdentity
 import link.infra.packwiz.installer.ui.data.LauncherBranding
 import link.infra.packwiz.installer.util.Log
-import okhttp3.HttpUrl.Companion.toHttpUrl
-import okhttp3.Request
 import okio.BufferedSource
-import okio.Path.Companion.toOkioPath
-import java.awt.image.BufferedImage
+import okio.buffer
+import okio.source
+import java.awt.Image
+import java.awt.Toolkit
 import java.io.IOException
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
-import java.util.concurrent.TimeUnit
+import java.nio.file.Path
+import java.nio.file.StandardOpenOption.CREATE_NEW
+import java.nio.file.StandardOpenOption.WRITE
 import javax.imageio.ImageIO
-import javax.imageio.stream.MemoryCacheImageInputStream
+import javax.imageio.stream.FileImageInputStream
 
-private const val CONFIG_NAME = "packwiz-launcher.json"
+internal const val LAUNCHER_CONFIG_NAME = "packwiz-launcher.json"
 private const val CONFIG_BYTES = 16L * 1024
 private const val IMAGE_BYTES = 8L * 1024 * 1024
+private const val GIF_BYTES = 128L * 1024 * 1024
 private const val IMAGE_PIXELS = 8L * 1024 * 1024
 
-internal fun loadLauncherBranding(packFile: PackwizPath<*>, packName: String, client: ClientHolder): LauncherBranding {
+internal fun loadLauncherBranding(folder: Path): LauncherBranding {
+	val root = folder.toAbsolutePath().normalize()
 	val config = try {
-		val bytes = readBrandingFile(packFile, CONFIG_NAME, CONFIG_BYTES, client) ?: return LauncherBranding(packName)
+		Files.createDirectories(root)
+		val path = root.resolve(LAUNCHER_CONFIG_NAME)
+		if (Files.notExists(path)) {
+			try {
+				val defaults = """
+					{
+					  "title": "${LauncherIdentity.NAME}",
+					  "subtitle": "",
+					  "background": ""
+					}
+				""".trimIndent() + "\n"
+				Files.write(path, defaults.toByteArray(Charsets.UTF_8), CREATE_NEW, WRITE)
+			} catch (_: FileAlreadyExistsException) {
+				// Another launcher already created the settings.
+			}
+		}
+		val bytes = readBrandingFile(root, LAUNCHER_CONFIG_NAME, CONFIG_BYTES) ?: return LauncherBranding("")
 		JsonParser.parseString(bytes.toString(Charsets.UTF_8)).asJsonObject
 	} catch (e: Exception) {
-		Log.warn("Could not load $CONFIG_NAME", e)
-		return LauncherBranding(packName)
+		Log.warn("Could not load ${root.resolve(LAUNCHER_CONFIG_NAME)}", e)
+		return LauncherBranding("")
 	}
-	val title = config.string("title") ?: packName
+	val title = config.string("title").orEmpty()
 	val subtitle = config.string("subtitle")
 	val background = config.string("background")?.let { path ->
 		try {
 			if (!isRelativeAssetPath(path)) throw IOException("Expected a path inside the pack directory")
-			readBrandingFile(packFile, path, IMAGE_BYTES, client)?.let(::decodeBackground)
+			findLocalAsset(root, path)?.let(::loadBackground)
 		} catch (e: Exception) {
 			Log.warn("Could not load launcher background", e)
 			null
@@ -55,29 +73,18 @@ private fun isRelativeAssetPath(path: String): Boolean {
 	return path.split('/').all { it.isNotEmpty() && it != ".." }
 }
 
-private fun readBrandingFile(packFile: PackwizPath<*>, relative: String, limit: Long, client: ClientHolder): ByteArray? {
-	return when (packFile) {
-		is PackwizFilePath -> {
-			val root = packFile.nioPath.toAbsolutePath().parent.toRealPath()
-			val file = root.resolve(relative)
-			if (!Files.isRegularFile(file)) return null
-			val realFile = file.toRealPath()
-			if (!realFile.startsWith(root)) throw IOException("Asset resolves outside the pack directory")
-			PackwizFilePath(realFile.toOkioPath()).source(client).use { it.readLimited(limit) }
-		}
-		is HttpUrlPath -> {
-			val root = packFile.toString().toHttpUrl().resolve(".") ?: return null
-			val url = root.newBuilder().addPathSegments(relative).build()
-			// A redirect can lead outside the pack origin or directory. Branding is optional.
-			val http = client.okHttpClient.newBuilder().followRedirects(false).callTimeout(5, TimeUnit.SECONDS).build()
-			val request = Request.Builder().url(url).header("User-Agent", "packwiz-installer").build()
-			http.newCall(request).execute().use { response ->
-				if (!response.isSuccessful) return null
-				response.body?.source()?.readLimited(limit)
-			}
-		}
-		else -> null
-	}
+private fun readBrandingFile(directory: Path, relative: String, limit: Long): ByteArray? {
+	val file = findLocalAsset(directory, relative) ?: return null
+	return Files.newInputStream(file).source().buffer().use { it.readLimited(limit) }
+}
+
+private fun findLocalAsset(directory: Path, relative: String): Path? {
+	val root = directory.toRealPath()
+	val file = root.resolve(relative)
+	if (!Files.isRegularFile(file)) return null
+	val realFile = file.toRealPath()
+	if (!realFile.startsWith(root)) throw IOException("Asset resolves outside the launcher directory")
+	return realFile
 }
 
 private fun BufferedSource.readLimited(limit: Long): ByteArray {
@@ -85,21 +92,37 @@ private fun BufferedSource.readLimited(limit: Long): ByteArray {
 	return readByteArray()
 }
 
-private fun decodeBackground(bytes: ByteArray): BufferedImage? {
-	MemoryCacheImageInputStream(bytes.inputStream()).use { stream ->
+private fun loadBackground(file: Path): Image? {
+	FileImageInputStream(file.toFile()).use { stream ->
 		val readers = ImageIO.getImageReaders(stream)
 		if (!readers.hasNext()) return null
 		val reader = readers.next()
 		try {
-			reader.setInput(stream, true, true)
-			val width = reader.getWidth(0)
-			val height = reader.getHeight(0)
-			if (width !in 1..8192 || height !in 1..8192 || width.toLong() * height > IMAGE_PIXELS) {
-				throw IOException("Launcher background dimensions are too large")
+			val animated = reader.formatName.equals("gif", ignoreCase = true)
+			val limit = if (animated) GIF_BYTES else IMAGE_BYTES
+			if (stream.length() > limit) throw IOException("Asset exceeds $limit bytes")
+			reader.setInput(stream, true, !animated)
+			checkBackgroundDimensions(reader.getWidth(0), reader.getHeight(0))
+			if (animated) {
+				val screen = reader.streamMetadata?.getAsTree("javax_imageio_gif_stream_1.0")?.let {
+					(it as javax.imageio.metadata.IIOMetadataNode).getElementsByTagName("LogicalScreenDescriptor").item(0)
+				} ?: throw IOException("GIF has no logical screen")
+				checkBackgroundDimensions(
+					screen.attributes.getNamedItem("logicalScreenWidth").nodeValue.toInt(),
+					screen.attributes.getNamedItem("logicalScreenHeight").nodeValue.toInt()
+				)
+				// AWT decodes consecutive frames with their delays and disposal rules as the image is displayed.
+				return Toolkit.getDefaultToolkit().createImage(file.toString())
 			}
 			return reader.read(0)
 		} finally {
 			reader.dispose()
 		}
+	}
+}
+
+private fun checkBackgroundDimensions(width: Int, height: Int) {
+	if (width !in 1..8192 || height !in 1..8192 || width.toLong() * height > IMAGE_PIXELS) {
+		throw IOException("Launcher background dimensions are too large")
 	}
 }

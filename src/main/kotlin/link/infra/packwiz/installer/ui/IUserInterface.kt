@@ -3,7 +3,6 @@ package link.infra.packwiz.installer.ui
 import link.infra.packwiz.installer.ui.data.ExceptionDetails
 import link.infra.packwiz.installer.ui.data.IOptionDetails
 import link.infra.packwiz.installer.ui.data.InstallProgress
-import link.infra.packwiz.installer.ui.data.LauncherBranding
 import link.infra.packwiz.installer.ui.data.ManualDownload
 import java.nio.file.Path
 
@@ -17,8 +16,7 @@ interface IUserInterface {
 	fun showErrorAndExit(message: String, e: Exception?): Nothing
 
 	var title: String
-	/** The GUI can load optional pack artwork without delaying installation. */
-	fun showPackBranding(packName: String, load: () -> LauncherBranding) {}
+	fun setPackName(packName: String) {}
 	fun submitProgress(progress: InstallProgress)
 	// Return true if the installation was cancelled!
 	fun showOptions(options: List<IOptionDetails>): Boolean
