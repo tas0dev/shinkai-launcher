@@ -54,7 +54,7 @@ class CurseForgeManualDownloadTest {
 		}
 		val pages = getCfProjectPages(listOf(10), client)
 		val manual = tasks.associateBy { it.manualDownload(folder, pages)!! }
-		assertEquals(listOf("2", "3").map { "https://www.curseforge.com/minecraft/mc-mods/example/files/$it" },
+		assertEquals(listOf("2", "3").map { "https://www.curseforge.com/minecraft/mc-mods/example/download/$it" },
 			manual.keys.map { it.url })
 		val offline = OkHttpClient.Builder().addInterceptor { throw java.io.IOException("offline") }.build()
 		val unresolved = files.first().linkedFile!!.copy()

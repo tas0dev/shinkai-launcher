@@ -260,7 +260,7 @@ internal class DownloadTask private constructor(val metadata: IndexFile.File, va
 		val filename = linked?.filename?.filename ?: metadata.file.filename
 		val cf = failedCurseForgeUpdate
 		val page = when {
-			cf != null -> cfPages[cf.projectId]?.let { "$it/files/${cf.fileId}" }
+			cf != null -> cfPages[cf.projectId]?.let { "$it/download/${cf.fileId}" }
 				?: "https://www.curseforge.com/projects/${cf.projectId}"
 			linked?.download?.url is HttpUrlPath -> browserUrl(linked.download.url.toString())
 			!metadata.metafile && filename.endsWith(".jar", true) && metadata.file is HttpUrlPath -> metadata.file.toString()
