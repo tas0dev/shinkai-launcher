@@ -59,7 +59,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			clientHolder.close()
 		}
 
-		ui.submitProgress(InstallProgress("Loading manifest file..."))
+		ui.submitProgress(InstallProgress("Loading manifest file...", "インストール状況を読み込み中"))
 		val gson = GsonBuilder()
 			.registerTypeAdapter(Hash::class.java, Hash.TypeHandler())
 			.registerTypeAdapter(PackwizFilePath::class.java, PackwizPath.adapterRelativeTo(opts.packFolder))
@@ -84,7 +84,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			handleCancellation()
 		}
 
-		ui.submitProgress(InstallProgress("Loading pack file..."))
+		ui.submitProgress(InstallProgress("Loading pack file...", "パックを確認中"))
 		val packFileSource = try {
 			val src = opts.packFile.source(clientHolder)
 			HashFormat.SHA256.source(src)
@@ -110,7 +110,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		val lu = LauncherUtils(opts, ui)
 
 		// MultiMC MC and loader version checker
-		ui.submitProgress(InstallProgress("Loading MultiMC pack file..."))
+		ui.submitProgress(InstallProgress("Loading MultiMC pack file...", "ゲームの構成を確認中"))
 		try {
 			when (lu.handleMultiMC(pf, gson)) {
 				LauncherUtils.LauncherStatus.CANCELLED -> cancelled = true
@@ -127,7 +127,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			handleCancellation()
 		}
 
-		ui.submitProgress(InstallProgress("Checking local files..."))
+		ui.submitProgress(InstallProgress("Checking local files...", "インストール済みのファイルを確認中"))
 
 		// If the side changes, invalidate EVERYTHING (even when the index hasn't changed)
 		val invalidateAll = opts.side != manifest.cachedSide
@@ -149,7 +149,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 
 			if (manifest.packFileHash?.let { it == packFileSource.hash } == true && invalidatedUris.isEmpty()) {
 				// todo: --force?
-				ui.submitProgress(InstallProgress("Modpack is already up to date!", 1, 1))
+				ui.submitProgress(InstallProgress("Modpack is already up to date!", 1, 1, "パックは最新です"))
 				if (manifest.cachedFiles.any { it.value.isOptional }) {
 					ui.awaitOptionalButton(false, opts.timeout)
 				}
@@ -205,7 +205,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 	private fun processIndex(indexUri: PackwizPath<*>, indexHash: Hash<*>, hashFormat: HashFormat<*>, manifest: ManifestFile, invalidatedFiles: List<PackwizFilePath>, invalidateAll: Boolean, clientHolder: ClientHolder) {
 		if (!invalidateAll) {
 			if (manifest.indexFileHash == indexHash && invalidatedFiles.isEmpty()) {
-				ui.submitProgress(InstallProgress("Modpack files are already up to date!", 1, 1))
+				ui.submitProgress(InstallProgress("Modpack files are already up to date!", 1, 1, "ファイルは最新です"))
 				if (manifest.cachedFiles.any { it.value.isOptional }) {
 					ui.awaitOptionalButton(false, opts.timeout)
 				}
@@ -247,7 +247,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			return
 		}
 
-		ui.submitProgress(InstallProgress("Checking local files..."))
+		ui.submitProgress(InstallProgress("Checking local files...", "インストール済みのファイルを確認中"))
 		val it: MutableIterator<Map.Entry<PackwizFilePath, ManifestFile.File>> = manifest.cachedFiles.entries.iterator()
 		while (it.hasNext()) {
 			val (uri, file) = it.next()
@@ -268,7 +268,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			showCancellationDialog()
 			return
 		}
-		ui.submitProgress(InstallProgress("Comparing new files..."))
+		ui.submitProgress(InstallProgress("Comparing new files...", "更新内容を確認中"))
 
 		// TODO: progress bar?
 		if (indexFile.files.isEmpty()) {
@@ -328,7 +328,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		if (optionTasks.isNotEmpty() && !optionsChanged) {
 			if (!ui.optionsButtonPressed) {
 				// TODO: this is so ugly
-				ui.submitProgress(InstallProgress("Reconfigure optional mods?", 0,1))
+				ui.submitProgress(InstallProgress("Reconfigure optional mods?", 0, 1, "任意 MOD を選択できます"))
 				ui.awaitOptionalButton(true, opts.timeout)
 				if (ui.cancelButtonPressed) {
 					showCancellationDialog()
@@ -381,7 +381,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 					DownloadTask.CompletionStatus.DELETED_WRONG_SIDE -> "Deleted ${task.name} (wrong side)"
 				}
 			}
-			ui.submitProgress(InstallProgress(progress, i + 1, tasks.size))
+			ui.submitProgress(InstallProgress(progress, i + 1, tasks.size, "ファイルの取得と確認"))
 
 			if (ui.cancelButtonPressed) { // Stop all tasks, don't launch the game (it's in an invalid state!)
 				// TODO: close client holder in more places?
@@ -406,7 +406,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 				return
 			}
 			if (manual.values.none(DownloadTask::failed)) {
-				ui.submitProgress(InstallProgress("Finished importing manual downloads", tasks.size, tasks.size))
+				ui.submitProgress(InstallProgress("Finished importing manual downloads", tasks.size, tasks.size, "手動ダウンロードの取り込み完了"))
 			}
 		}
 
@@ -430,7 +430,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 	}
 
 	private fun validateAndResolve(tasks: List<DownloadTask>, clientHolder: ClientHolder) {
-		ui.submitProgress(InstallProgress("Validating existing files..."))
+		ui.submitProgress(InstallProgress("Validating existing files...", "ファイルを照合中"))
 
 		// Validate existing files
 		for (downloadTask in tasks.filter(DownloadTask::correctSide)) {
@@ -444,7 +444,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			.mapNotNull { it.metadata.linkedFile }
 			.filter { it.download.mode == DownloadMode.CURSEFORGE }.toList()
 		if (cfFiles.isNotEmpty()) {
-			ui.submitProgress(InstallProgress("Resolving CurseForge metadata..."))
+			ui.submitProgress(InstallProgress("Resolving CurseForge metadata...", "CurseForge の配布情報を確認中"))
 			resolveCfMetadata(cfFiles, clientHolder.okHttpClient)
 		}
 	}

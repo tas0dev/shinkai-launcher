@@ -4,7 +4,7 @@ import link.infra.packwiz.installer.ui.data.LauncherBranding;
 
 import javax.imageio.ImageIO;
 import javax.swing.BorderFactory;
-import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JPanel;
 import javax.swing.JTextArea;
 import javax.swing.UIManager;
@@ -21,7 +21,7 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 
-/** Artwork and pack information shared by the home screen and the missing-mod dialog. */
+/** Artwork and pack information for the home screen. */
 final class PackCover extends JPanel {
 	private static final Color PAPER = new Color(250, 247, 233);
 	private static final Font DISPLAY_FONT = loadDisplayFont();
@@ -29,24 +29,20 @@ final class PackCover extends JPanel {
 
 	private final JTextArea title = textArea("パック名");
 	private final JTextArea subtitle = textArea("パックの説明");
-	private final JButton launch;
+	private final JComponent launchArea;
 	private Image artwork = DEFAULT_ART;
 	private Font titleFamily = DISPLAY_FONT;
 	private int layoutWidth = -1;
 	private int layoutHeight;
 
-	PackCover(LauncherBranding branding) {
-		this(branding, null);
-	}
-
-	PackCover(LauncherBranding branding, JButton launch) {
+	PackCover(LauncherBranding branding, JComponent launchArea) {
 		super(null);
-		this.launch = launch;
+		this.launchArea = launchArea;
 		setBackground(new Color(25, 44, 42));
-		setPreferredSize(launch == null ? new Dimension(400, 150) : new Dimension(1000, 550));
+		setPreferredSize(new Dimension(1000, 550));
 		add(title);
 		add(subtitle);
-		if (launch != null) add(launch);
+		add(launchArea);
 		setBranding(branding);
 	}
 
@@ -104,28 +100,25 @@ final class PackCover extends JPanel {
 		if (layoutWidth == width && layoutHeight == height) return;
 		layoutWidth = width;
 		layoutHeight = height;
-		boolean home = launch != null;
-		int inset = home ? Math.max(24, (int) (width * .07)) : 22;
+		int inset = Math.max(24, (int) (width * .07));
 		int contentWidth = Math.max(1, width - 2 * inset);
-		int bottom = height - (home ? Math.max(26, height / 11) : 15);
-		if (home) {
-			launch.setBounds(inset, bottom - 47, 160, 47);
-			bottom -= 69;
-		}
+		int bottom = height - Math.max(26, height / 11);
+		launchArea.setBounds(inset, bottom - 59, Math.min(contentWidth, 344), 59);
+		bottom -= 80;
 		if (subtitle.isVisible()) {
-			int subtitleWidth = home ? Math.min(contentWidth, 620) : contentWidth;
-			subtitle.setFont(UIManager.getFont("Label.font").deriveFont(home ? 16f : 14f));
+			int subtitleWidth = Math.min(contentWidth, 620);
+			subtitle.setFont(UIManager.getFont("Label.font").deriveFont(16f));
 			subtitle.setSize(subtitleWidth, 1);
 			int linesHeight = Math.min(subtitle.getPreferredSize().height, height / 3);
 			bottom -= linesHeight;
 			subtitle.setBounds(inset, bottom, subtitleWidth, linesHeight);
-			bottom -= home ? 14 : 4;
+			bottom -= 14;
 		}
 
 		int available = Math.max(20, bottom - 8);
 		boolean longTitle = title.getText().codePointCount(0, title.getText().length()) > 32;
-		int size = home ? Math.min(longTitle ? 59 : 96, Math.max(40, width / 10)) : 38;
-		int titleWidth = home ? Math.min(contentWidth, longTitle ? 880 : size * 6) : contentWidth;
+		int size = Math.min(longTitle ? 59 : 96, Math.max(40, width / 10));
+		int titleWidth = Math.min(contentWidth, longTitle ? 880 : size * 6);
 		int titleHeight;
 		do {
 			title.setFont(titleFamily.deriveFont((float) size));

@@ -6,6 +6,7 @@ import link.infra.packwiz.installer.ui.data.LauncherBranding;
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import javax.swing.plaf.basic.BasicButtonUI;
+import javax.swing.plaf.basic.BasicProgressBarUI;
 import java.awt.*;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
@@ -24,14 +25,16 @@ public final class InstallWindow extends JFrame {
 	private static final Color PINE = new Color(0x10211F);
 	private static final Color CREAM = new Color(0xFAF7E9);
 	private final JLabel status = new JLabel("待機中");
-	private final JProgressBar progress = new JProgressBar();
 	private final JButton launch = new JButton("起動", new PlayIcon());
+	private final CardLayout launchCards = new CardLayout();
+	private final JPanel launchArea = new JPanel(launchCards);
+	private final JLabel stage = new JLabel();
+	private final JLabel count = new JLabel();
+	private final JProgressBar progress = new JProgressBar();
 	private final JButton options = new JButton("任意 MOD…");
 	private final JButton cancel = new JButton("キャンセル");
 	private final JButton ok = new JButton("続ける");
-	private LauncherBranding branding = new LauncherBranding(LauncherIdentity.NAME, null, null);
-	private final PackCover homeCover = new PackCover(branding, launch);
-	private PackCover recoveryCover;
+	private final PackCover homeCover = new PackCover(new LauncherBranding(LauncherIdentity.NAME, null, null), launchArea);
 	private volatile SettingsWindow settings;
 	private final List<Runnable> waitingForSettings = new ArrayList<>();
 
@@ -68,6 +71,13 @@ public final class InstallWindow extends JFrame {
 		launch.setFont(launch.getFont().deriveFont(Font.BOLD, 16f));
 		launch.setIconTextGap(12);
 		launch.addActionListener(e -> handler.requestLaunch());
+		launchArea.setOpaque(false);
+		JPanel launchCard = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 6));
+		launchCard.setOpaque(false);
+		launch.setPreferredSize(new Dimension(160, 47));
+		launchCard.add(launch);
+		launchArea.add(launchCard, "launch");
+		launchArea.add(createProgressCard(), "progress");
 		getRootPane().setDefaultButton(launch);
 		content.add(homeCover, BorderLayout.CENTER);
 
@@ -76,12 +86,7 @@ public final class InstallWindow extends JFrame {
 		footer.setBorder(new EmptyBorder(0, 36, 0, 26));
 		status.putClientProperty("html.disable", true);
 		status.setForeground(new Color(0xD8DFD4));
-		status.setLabelFor(progress);
 		footer.add(status, BorderLayout.CENTER);
-		progress.setPreferredSize(new Dimension(100, 4));
-		progress.setVisible(false);
-		progress.getAccessibleContext().setAccessibleName("インストールの進捗");
-		footer.add(progress, BorderLayout.NORTH);
 
 		JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING, 5, 6));
 		actions.setOpaque(false);
@@ -108,6 +113,32 @@ public final class InstallWindow extends JFrame {
 		setSize(Math.min(getWidth(), screen.width), Math.min(getHeight(), screen.height));
 		setMinimumSize(new Dimension(Math.min(450, screen.width), Math.min(420, screen.height)));
 		setLocationRelativeTo(null);
+	}
+
+	private JPanel createProgressCard() {
+		JPanel panel = new JPanel(new BorderLayout(0, 7));
+		panel.setBackground(new Color(0x142925));
+		panel.setBorder(new EmptyBorder(9, 12, 9, 12));
+		JPanel row = new JPanel(new BorderLayout(10, 0));
+		row.setOpaque(false);
+		stage.setForeground(CREAM);
+		stage.setFont(stage.getFont().deriveFont(Font.BOLD, 14f));
+		count.setForeground(new Color(0xD8DFD4));
+		row.add(stage, BorderLayout.CENTER);
+		row.add(count, BorderLayout.EAST);
+		panel.add(row, BorderLayout.NORTH);
+		progress.setUI(new BasicProgressBarUI() {
+			@Override protected int getCellLength() { return 1; }
+			@Override protected int getCellSpacing() { return 0; }
+		});
+		progress.setBackground(new Color(0x40544F));
+		progress.setForeground(new Color(0xA9C9A6));
+		progress.setBorderPainted(false);
+		progress.setPreferredSize(new Dimension(160, 5));
+		progress.getAccessibleContext().setAccessibleName("起動準備の進捗");
+		stage.setLabelFor(progress);
+		panel.add(progress, BorderLayout.SOUTH);
+		return panel;
 	}
 
 	private static void styleButton(JButton button, Color foreground, Color background, Color hover) {
@@ -142,23 +173,16 @@ public final class InstallWindow extends JFrame {
 	}
 
 	public void startInstalling() {
-		launch.setVisible(false);
+		launchCards.show(launchArea, "progress");
 		getRootPane().setDefaultButton(null);
-		status.setText("パックを確認しています…");
+		stage.setText("パックを確認中");
+		status.setText("");
 		progress.setIndeterminate(true);
-		progress.setVisible(true);
 		cancel.setVisible(true);
 	}
 
 	public void setBranding(LauncherBranding value) {
-		branding = value;
 		homeCover.setBranding(value);
-		if (recoveryCover != null) recoveryCover.setBranding(value);
-	}
-
-	public JPanel createRecoveryCover() {
-		recoveryCover = new PackCover(branding);
-		return recoveryCover;
 	}
 
 	public boolean getSettingsOpen() {
@@ -187,13 +211,35 @@ public final class InstallWindow extends JFrame {
 	}
 
 	public void displayProgress(InstallProgress update) {
+		stage.setText(update.getLabel());
 		progress.setIndeterminate(!update.getHasProgress());
 		if (update.getHasProgress()) {
 			progress.setMaximum(update.getProgressTotal());
 			progress.setValue(update.getProgress());
 		}
+		count.setText(update.getHasProgress() ? update.getProgress() + " / " + update.getProgressTotal() : "");
 		status.setText(update.getMessage());
 		status.setToolTipText(update.getMessage());
+	}
+
+	void showManualDownloadProgress(int remaining, int total) {
+		stage.setText("手動ダウンロード待ち");
+		count.setText("残り " + remaining + " 件");
+		progress.setIndeterminate(false);
+		progress.setMaximum(total);
+		progress.setValue(total - remaining);
+		status.setText("");
+		status.setToolTipText(null);
+	}
+
+	public void showLaunchReady() {
+		stage.setText("起動準備が完了しました");
+		count.setText("");
+		progress.setIndeterminate(false);
+		progress.setValue(progress.getMaximum());
+		status.setText("");
+		status.setToolTipText(null);
+		cancel.setVisible(false);
 	}
 
 	public void disableOptionsButton(boolean hasOptions) {

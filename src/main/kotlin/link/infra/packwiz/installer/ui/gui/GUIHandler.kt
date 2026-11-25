@@ -84,6 +84,12 @@ class GUIHandler : IUserInterface {
 		frmPackwizlauncher.dispose()
 	}
 
+	fun showLaunchReady() {
+		frmPackwizlauncher.afterSettingsClose { frmPackwizlauncher.showLaunchReady() }
+		// Give Swing a repaint before the process exits and hands control back to the launcher.
+		Thread.sleep(600)
+	}
+
 	fun awaitLaunch(): Boolean = launchDecision.get()
 
 	fun requestLaunch() {
@@ -195,7 +201,7 @@ class GUIHandler : IUserInterface {
 		val window = frmPackwizlauncher.afterSettingsClose {
 			val folder = DownloadDirectories.customDirectory() ?: systemFolder
 			ManualDownloadWindow(frmPackwizlauncher, missing, folder, systemFolder).also { dialog ->
-				EventQueue.invokeLater { dialog.isVisible = true }
+				EventQueue.invokeLater { dialog.showOverHome() }
 			}
 		}
 		return window.awaitDownloads { folder -> scan(folder) }

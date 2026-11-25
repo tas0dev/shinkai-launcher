@@ -131,6 +131,7 @@ class Main(args: Array<String>) {
 			ui.showErrorAndExit("Update process failed", e)
 		}
 		println("Finished successfully!")
+		if (ui is GUIHandler) ui.showLaunchReady()
 		ui.dispose()
 	}
 
