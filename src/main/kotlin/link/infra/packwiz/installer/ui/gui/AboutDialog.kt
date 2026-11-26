@@ -1,7 +1,9 @@
 package link.infra.packwiz.installer.ui.gui
 
+import java.awt.BorderLayout
 import java.awt.Component;
 import java.awt.Frame
+import javax.swing.BoxLayout
 import javax.swing.JButton
 import javax.swing.JDialog
 import javax.swing.JLabel
@@ -36,7 +38,10 @@ class AboutDialogView(owner: Frame) : JDialog(owner, "About", true) {
     val version = AboutDialog::class.java.`package`.implementationVersion ?: "開発版"
 
     init {
+        contentPane.layout = BoxLayout(contentPane, BoxLayout.Y_AXIS)
         defaultCloseOperation = DO_NOTHING_ON_CLOSE
+
+        isResizable = false
         add(JLabel("Shinkai Launcher"))
         add(JLabel("Version: $version\n"))
 
@@ -46,6 +51,12 @@ class AboutDialogView(owner: Frame) : JDialog(owner, "About", true) {
             addActionListener {
                 val licenseDialog = OpenSourceLicense()
 //                licenseDialog.setVisible(true, this@AboutDialogView)
+            }
+        })
+
+        add(JButton("Close").apply {
+            addActionListener {
+                dispose()
             }
         })
     }
