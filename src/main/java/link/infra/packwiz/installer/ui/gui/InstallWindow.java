@@ -59,8 +59,16 @@ public final class InstallWindow extends JFrame {
 			appIcon.setIcon(new ImageIcon(LauncherIdentity.ICON.getScaledInstance(32, 32, Image.SCALE_REPLICATE)));
 		}
 		header.add(appIcon, BorderLayout.WEST);
+
+		// About //
+		JButton openAbout = iconButton("information", "About", 44);
+		openAbout.addActionListener(e -> showAbout());
+
+		// Settings //
 		JButton openSettings = iconButton("sliders", "設定", 44);
 		openSettings.addActionListener(e -> showSettings(this, ignored -> {}));
+
+		// Window controls //
 		JButton minimize = iconButton("minus", "最小化", 36);
 		minimize.addActionListener(e -> setState(Frame.ICONIFIED));
 		JButton close = iconButton("close", "閉じる", 36);
@@ -69,6 +77,8 @@ public final class InstallWindow extends JFrame {
 		windowControls.setOpaque(false);
 		windowControls.add(minimize);
 		windowControls.add(close);
+
+		// Header //
 		header.add(windowControls, BorderLayout.EAST);
 		enableHeaderDrag(header, appIcon);
 
@@ -89,8 +99,11 @@ public final class InstallWindow extends JFrame {
 		actions.setOpaque(false);
 		PixelStyle.styleButton(ok, true, false);
 		PixelStyle.styleButton(cancel, false, false);
+
+		// NOTE: If you add more buttons here, also update the actions.
 		actions.add(ok);
 		actions.add(cancel);
+		actions.add(openAbout);
 		actions.add(openSettings);
 		homeCover = new PackCover(new LauncherBranding(LauncherIdentity.NAME, null, null), launchArea, header, actions);
 		setContentPane(homeCover);
@@ -113,7 +126,16 @@ public final class InstallWindow extends JFrame {
 		setLocationRelativeTo(null);
 	}
 
-	private void enableHeaderDrag(Component... surfaces) {
+    private void showAbout() {
+        try {
+			AboutDialog aboutDialog = new AboutDialog();
+			aboutDialog.setVisible(true, this);
+		} catch (Exception e) {
+			System.err.println("Failed to show About dialog: " + e.getMessage());
+		}
+    }
+
+    private void enableHeaderDrag(Component... surfaces) {
 		MouseAdapter drag = new MouseAdapter() {
 			private Point offset;
 
