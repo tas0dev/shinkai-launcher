@@ -54,6 +54,11 @@ application {
 }
 
 tasks.processResources {
+	dependsOn("generateLicenseReport")
+	from(layout.buildDirectory.file("reports/dependency-license/licenses.md")) {
+		into("META-INF")
+		rename { "DEPENDENCY-LICENSES.md" }
+	}
 	providers.gradleProperty("shinkaiSigningPublicKey").orNull?.let { keyPath ->
 		val key = file(keyPath)
 		inputs.property("shinkaiSigningPublicKeyPath", keyPath)

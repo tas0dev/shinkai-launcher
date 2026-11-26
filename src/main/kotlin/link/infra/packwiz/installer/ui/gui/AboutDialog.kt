@@ -21,10 +21,12 @@ class AboutDialog{
     object AboutDialogObject {
         @JvmStatic
         fun showAbout(parent: Component) {
-            JOptionPane.showMessageDialog(
-                parent,
-                "About",
-            )
+            val owner = parent as? Frame ?: javax.swing.SwingUtilities.getWindowAncestor(parent) as? Frame
+            val dialog = AboutDialogView(owner ?: throw IllegalArgumentException("Parent component must be a Frame or have a Frame ancestor"))
+            dialog.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
+            dialog.pack()
+            dialog.setLocationRelativeTo(owner)
+            dialog.isVisible = true
         }
 
     }
