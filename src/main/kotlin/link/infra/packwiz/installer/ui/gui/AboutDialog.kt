@@ -1,7 +1,12 @@
 package link.infra.packwiz.installer.ui.gui
 
 import java.awt.Component;
+import java.awt.Frame
+import javax.swing.JButton
+import javax.swing.JDialog
+import javax.swing.JLabel
 import javax.swing.JOptionPane
+import javax.swing.WindowConstants
 
 class AboutDialog{
     private var visible: Boolean = false;
@@ -22,5 +27,24 @@ class AboutDialog{
             )
         }
 
+    }
+}
+
+class AboutDialogView(owner: Frame) : JDialog(owner, "About", true) {
+    val version = AboutDialog::class.java.`package`.implementationVersion ?: "開発版"
+
+    init {
+        defaultCloseOperation = EXIT_ON_CLOSE
+        add(JLabel("Shinkai Launcher"))
+        add(JLabel("Version: $version\n"))
+
+        add(JLabel("Copyright (c) 2021 comp500\n" +
+                         "Copyright (c) 2026 tas0dev"))
+        add(JButton("Open Source Licenses").apply {
+            addActionListener {
+                val licenseDialog = OpenSourceLicense()
+//                licenseDialog.setVisible(true, this@AboutDialogView)
+            }
+        })
     }
 }
