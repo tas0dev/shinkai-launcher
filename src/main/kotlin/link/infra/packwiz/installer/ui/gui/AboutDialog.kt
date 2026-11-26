@@ -36,7 +36,7 @@ class AboutDialogView(owner: Frame) : JDialog(owner, "About", true) {
     val version = AboutDialog::class.java.`package`.implementationVersion ?: "開発版"
 
     init {
-        defaultCloseOperation = EXIT_ON_CLOSE
+        defaultCloseOperation = DO_NOTHING_ON_CLOSE
         add(JLabel("Shinkai Launcher"))
         add(JLabel("Version: $version\n"))
 
