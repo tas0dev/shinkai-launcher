@@ -66,6 +66,7 @@ class GUIHandler : IUserInterface {
 			} catch (e: Exception) {
 				Log.warn("Failed to set look and feel", e)
 			}
+			LauncherFonts.install()
 			frmPackwizlauncher = InstallWindow(this).apply {
 				title = this@GUIHandler.title
 			}

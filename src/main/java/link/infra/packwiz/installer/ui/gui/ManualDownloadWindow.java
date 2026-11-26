@@ -10,7 +10,6 @@ import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.GridLayout;
 import java.awt.LayoutManager;
@@ -83,7 +82,7 @@ final class ManualDownloadWindow extends JDialog {
 		JPanel overview = panel(new BorderLayout(12, 0));
 		JPanel titles = panel(new BorderLayout(0, 3));
 		JLabel title = label("不足しているMOD");
-		title.setFont(title.getFont().deriveFont(Font.BOLD, 21f));
+		title.setFont(LauncherFonts.emphasis(title.getFont(), 21f));
 		titles.add(title, BorderLayout.NORTH);
 		remaining.setForeground(MUTED);
 		titles.add(remaining, BorderLayout.CENTER);
@@ -130,7 +129,7 @@ final class ManualDownloadWindow extends JDialog {
 					BorderFactory.createEmptyBorder(9, 0, 9, 0)));
 			JPanel names = panel(new GridLayout(2, 1));
 			JLabel name = label(download.getName());
-			name.setFont(name.getFont().deriveFont(Font.BOLD));
+			name.setFont(LauncherFonts.emphasis(name.getFont(), name.getFont().getSize2D()));
 			name.setToolTipText(download.getName());
 			names.add(name);
 			JLabel filename = label(download.getFilename());
@@ -247,7 +246,7 @@ final class ManualDownloadWindow extends JDialog {
 		});
 		button.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line),
 				BorderFactory.createEmptyBorder(7, 10, 7, 10)));
-		if (primary) button.setFont(button.getFont().deriveFont(Font.BOLD));
+		if (primary) button.setFont(LauncherFonts.emphasis(button.getFont(), button.getFont().getSize2D()));
 		return button;
 	}
 

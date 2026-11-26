@@ -55,7 +55,7 @@ public final class InstallWindow extends JFrame {
 		header.setBorder(new EmptyBorder(6, 36, 6, 36));
 		JLabel packName = new JLabel(LauncherIdentity.NAME);
 		packName.setForeground(CREAM);
-		packName.setFont(packName.getFont().deriveFont(Font.BOLD, 16f));
+		packName.setFont(LauncherFonts.emphasis(packName.getFont(), 16f));
 		if (LauncherIdentity.ICON != null) {
 			packName.setIcon(new ImageIcon(LauncherIdentity.ICON.getScaledInstance(32, 32, Image.SCALE_SMOOTH)));
 			packName.setIconTextGap(10);
@@ -68,7 +68,7 @@ public final class InstallWindow extends JFrame {
 		content.add(header, BorderLayout.NORTH);
 
 		styleButton(launch, PINE, CREAM, Color.WHITE);
-		launch.setFont(launch.getFont().deriveFont(Font.BOLD, 16f));
+		launch.setFont(LauncherFonts.emphasis(launch.getFont(), 16f));
 		launch.setIconTextGap(12);
 		launch.addActionListener(e -> handler.requestLaunch());
 		launchArea.setOpaque(false);
@@ -122,7 +122,7 @@ public final class InstallWindow extends JFrame {
 		JPanel row = new JPanel(new BorderLayout(10, 0));
 		row.setOpaque(false);
 		stage.setForeground(CREAM);
-		stage.setFont(stage.getFont().deriveFont(Font.BOLD, 14f));
+		stage.setFont(LauncherFonts.emphasis(stage.getFont(), 15f));
 		count.setForeground(new Color(0xD8DFD4));
 		row.add(stage, BorderLayout.CENTER);
 		row.add(count, BorderLayout.EAST);
