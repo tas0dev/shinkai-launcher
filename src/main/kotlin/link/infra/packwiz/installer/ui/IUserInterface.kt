@@ -14,6 +14,7 @@ interface IUserInterface {
 		showErrorAndExit(message, null)
 	}
 	fun showErrorAndExit(message: String, e: Exception?): Nothing
+	fun showSecurityErrorAndExit(message: String, e: Exception): Nothing = showErrorAndExit(message, e)
 
 	var title: String
 	fun setPackName(packName: String) {}

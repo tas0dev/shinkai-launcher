@@ -7,7 +7,11 @@ import okhttp3.Request
 import okio.BufferedSource
 import okio.IOException
 
-class HttpUrlPath(private val url: HttpUrl, path: String? = null): PackwizPath<HttpUrlPath>(path) {
+class HttpUrlPath(
+	private val url: HttpUrl,
+	path: String? = null,
+	private val followRedirects: Boolean = true,
+): PackwizPath<HttpUrlPath>(path) {
 	private fun build() = if (path == null) { url } else { url.newBuilder().addPathSegments(path).build() }
 
 	@Throws(RequestException::class)
@@ -19,7 +23,8 @@ class HttpUrlPath(private val url: HttpUrl, path: String? = null): PackwizPath<H
 			.get()
 			.build()
 		try {
-			val res = clientHolder.okHttpClient.newCall(req).execute()
+			val client = if (followRedirects) clientHolder.okHttpClient else clientHolder.directHttpClient
+			val res = client.newCall(req).execute()
 			// Can't use .use since it would close the response body before returning it to the caller
 			try {
 				if (!res.isSuccessful) {
@@ -40,7 +45,7 @@ class HttpUrlPath(private val url: HttpUrl, path: String? = null): PackwizPath<H
 		}
 	}
 
-	override fun construct(path: String): HttpUrlPath = HttpUrlPath(url, path)
+	override fun construct(path: String): HttpUrlPath = HttpUrlPath(url, path, followRedirects)
 
 	override val folder: Boolean
 		get() = pathFolder ?: (url.pathSegments.last() == "")

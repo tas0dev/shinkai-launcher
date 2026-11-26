@@ -23,6 +23,7 @@ import link.infra.packwiz.installer.ui.IUserInterface.CancellationResult
 import link.infra.packwiz.installer.ui.IUserInterface.ExceptionListResult
 import link.infra.packwiz.installer.ui.data.InstallProgress
 import link.infra.packwiz.installer.util.Log
+import okio.Buffer
 import okio.buffer
 import java.io.IOException
 import java.io.InputStreamReader
@@ -34,7 +35,11 @@ import java.util.concurrent.ExecutorCompletionService
 import java.util.concurrent.Executors
 import kotlin.system.exitProcess
 
-class UpdateManager internal constructor(private val opts: Options, val ui: IUserInterface) {
+class UpdateManager internal constructor(
+	private val opts: Options,
+	val ui: IUserInterface,
+	private val signedPack: SignedPack? = null,
+) {
 	private var cancelled = false
 	private var cancelledStartGame = false
 	private var errorsOccurred = false
@@ -84,9 +89,16 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 			handleCancellation()
 		}
 
-		ui.submitProgress(InstallProgress("Loading pack file...", "パックを確認中"))
+		val packProgress = if (signedPack == null) "パックを確認中" else "配布パックの署名を確認中"
+		ui.submitProgress(InstallProgress("Loading pack file...", packProgress))
+		val verifiedPack = try {
+			signedPack?.load(clientHolder)
+		} catch (e: Exception) {
+			ui.showSecurityErrorAndExit("配布パックの署名を確認できなかったため、更新を中止しました。", e)
+		}
+		val packFile = verifiedPack?.path ?: opts.packFile
 		val packFileSource = try {
-			val src = opts.packFile.source(clientHolder)
+			val src = verifiedPack?.let { Buffer().write(it.bytes) } ?: packFile.source(clientHolder)
 			HashFormat.SHA256.source(src)
 		} catch (e: Exception) {
 			// TODO: ensure suppressed/caused exceptions are shown?
@@ -94,7 +106,7 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		}
 		val pf = packFileSource.buffer().use {
 			try {
-				PackFile.mapper(opts.packFile).decode<PackFile>(it.inputStream())
+				PackFile.mapper(packFile).decode<PackFile>(it.inputStream())
 			} catch (e: IllegalStateException) {
 				ui.showErrorAndExit("Failed to parse pack.toml", e)
 			}
@@ -220,20 +232,22 @@ class UpdateManager internal constructor(private val opts: Options, val ui: IUse
 		}
 		manifest.indexFileHash = indexHash
 
-		val indexFileSource = try {
-			val src = indexUri.source(clientHolder)
-			hashFormat.source(src)
+		val verifiedIndex = try {
+			val indexFileSource = hashFormat.source(indexUri.source(clientHolder))
+			indexFileSource.buffer().use { source ->
+				check(!source.request(32L * 1024 * 1024 + 1)) { "index.toml exceeds 32 MiB" }
+				check(indexHash == indexFileSource.hash) { "The index.toml hash does not match pack.toml" }
+				source.buffer.clone()
+			}
 		} catch (e: Exception) {
-			ui.showErrorAndExit("Failed to download index file", e)
+			if (signedPack != null) ui.showSecurityErrorAndExit("配布インデックスを確認できなかったため、更新を中止しました。", e)
+			ui.showErrorAndExit("Failed to verify index.toml", e)
 		}
 
 		val publishedIndex = try {
-			IndexFile.mapper(indexUri).decode<IndexFile>(indexFileSource.buffer().inputStream())
+			IndexFile.mapper(indexUri).decode<IndexFile>(verifiedIndex.inputStream())
 		} catch (e: IllegalStateException) {
 			ui.showErrorAndExit("Failed to parse index file", e)
-		}
-		if (indexHash != indexFileSource.hash) {
-			ui.showErrorAndExit("Your index file hash is invalid! The pack developer should packwiz refresh on the pack again")
 		}
 		// A previous release may have indexed the launcher config. Ownership is now local.
 		val localConfig = opts.packFolder / LAUNCHER_CONFIG_NAME

@@ -7,7 +7,8 @@ import okio.FileSystem
 import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 
-class ClientHolder {
+class ClientHolder internal constructor(private val configureHttp: OkHttpClient.Builder.() -> Unit) {
+	constructor() : this({})
 	// Tries 10s timeouts (default), then 15s timeouts, then 60s timeouts
 	private val retryTimes = arrayOf(15, 60)
 
@@ -45,7 +46,10 @@ class ClientHolder {
 
 			res ?: throw lastException!!
 		}
+		.apply(configureHttp)
 		.build() }
+
+	val directHttpClient by lazy { okHttpClient.newBuilder().followRedirects(false).build() }
 
 	val fileSystem = FileSystem.SYSTEM
 

@@ -142,6 +142,15 @@ class GUIHandler : IUserInterface {
 		exitProcess(1)
 	}
 
+	override fun showSecurityErrorAndExit(message: String, e: Exception): Nothing {
+		Log.fatal(message, e)
+		frmPackwizlauncher.afterSettingsClose {
+			JOptionPane.showMessageDialog(frmPackwizlauncher, "$message\n${e.message ?: e.javaClass.simpleName}",
+				title, JOptionPane.ERROR_MESSAGE)
+		}
+		exitProcess(1)
+	}
+
 	override fun submitProgress(progress: InstallProgress) {
 		val sb = StringBuilder()
 		if (progress.hasProgress) {

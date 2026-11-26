@@ -15,6 +15,8 @@ packwiz-installer itself is under the MIT license ([Source](https://github.com/p
   - Copyright 2010-2020 JetBrains s.r.o and respective authors and developers
 - 4koma 1.1.0: MIT ([Source](https://github.com/valderman/4koma))
   - Copyright (c) 2021 Anton Ekblad
+- Bouncy Castle 1.86: MIT ([Source](https://github.com/bcgit/bc-java))
+  - Copyright (c) 2000–2023 The Legion of the Bouncy Castle Inc.
 - Noto Sans JP: SIL Open Font License 1.1 ([Source](https://github.com/google/fonts/tree/main/ofl/notosansjp))
   - Copyright 2014–2021 Adobe. Regular and Medium are static instances of the upstream variable font.
   - The full license is bundled as `link/infra/packwiz/installer/ui/NotoSansJP-OFL.txt`.

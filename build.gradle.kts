@@ -43,6 +43,7 @@ dependencies {
 	implementation(kotlin("stdlib-jdk8"))
 	implementation("com.squareup.okhttp3:okhttp:4.10.0")
 	implementation("cc.ekblad:4koma:1.1.0")
+	implementation("org.bouncycastle:bcprov-jdk15to18:1.86")
 	testImplementation("junit:junit:4.13.2")
 
 	r8("com.android.tools:r8:3.3.28")
@@ -53,6 +54,21 @@ application {
 }
 
 tasks.processResources {
+	providers.gradleProperty("shinkaiSigningPublicKey").orNull?.let { keyPath ->
+		val key = file(keyPath)
+		inputs.property("shinkaiSigningPublicKeyPath", keyPath)
+		doFirst {
+			check(key.isFile) { "Shinkai signing public key not found: $key" }
+			val ed25519DerHeader = byteArrayOf(0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00)
+			check(key.length() == 44L && key.readBytes().copyOfRange(0, ed25519DerHeader.size).contentEquals(ed25519DerHeader)) {
+				"Expected an Ed25519 public key in SubjectPublicKeyInfo DER format: $key"
+			}
+		}
+		from(key) {
+			into("link/infra/packwiz/installer")
+			rename { "shinkai-pack-signing.der" }
+		}
+	}
 	from("docs/assets") {
 		include("YoungSerif-Regular.ttf", "YoungSerif-OFL.txt", "evergreen-valley.jpg")
 		into("link/infra/packwiz/installer/ui")
@@ -82,6 +98,10 @@ tasks.shadowJar {
 	//exclude("**/*.kotlin_builtins")
 	exclude("META-INF/maven/**/*")
 	exclude("META-INF/proguard/**/*")
+	// Signatures from dependencies no longer match after shading and shrinking.
+	exclude("META-INF/*.SF", "META-INF/*.RSA", "META-INF/*.DSA", "META-INF/*.EC")
+	// The lightweight Ed25519 API doesn't require registration as a JCA provider.
+	exclude("META-INF/services/java.security.Provider")
 
 	// Relocate Commons CLI, so that it doesn't clash with old packwiz-installer-bootstrap (that shades it)
 	relocate("org.apache.commons.cli", "link.infra.packwiz.installer.deps.commons-cli")

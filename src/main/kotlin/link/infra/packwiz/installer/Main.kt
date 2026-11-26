@@ -11,6 +11,7 @@ import link.infra.packwiz.installer.ui.gui.LauncherIdentity
 import link.infra.packwiz.installer.ui.wrap
 import link.infra.packwiz.installer.util.Log
 import okhttp3.HttpUrl.Companion.toHttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okio.Path.Companion.toOkioPath
 import okio.Path.Companion.toPath
 import org.apache.commons.cli.DefaultParser
@@ -75,6 +76,8 @@ class Main(args: Array<String>) {
 		}
 
 		val packFileRaw = unparsedArgs[0]
+		val remoteUrl = packFileRaw.toHttpUrlOrNull()
+		val signedPack = remoteUrl?.let(SignedPack::forHost)
 
 		val packFile = when {
 			// HTTP(s) URLs
@@ -126,7 +129,7 @@ class Main(args: Array<String>) {
 
 		// Start update process!
 		try {
-			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout), ui)
+			UpdateManager(UpdateManager.Options(packFile, manifestFile, packFolder, multimcFolder, side, timeout), ui, signedPack)
 		} catch (e: Exception) {
 			ui.showErrorAndExit("Update process failed", e)
 		}

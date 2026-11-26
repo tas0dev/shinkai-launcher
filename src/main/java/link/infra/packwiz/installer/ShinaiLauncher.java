@@ -12,7 +12,7 @@ public final class ShinaiLauncher {
 		if (args.length == 0) {
 			Path jar = Paths.get(ShinaiLauncher.class.getProtectionDomain().getCodeSource().getLocation().toURI());
 			Path folder = Files.isDirectory(jar) ? Paths.get("").toAbsolutePath() : jar.getParent();
-			args = new String[] {"--pack-folder", folder.toString(), folder.resolve("pack.toml").toString()};
+			args = new String[] {"--pack-folder", folder.toString(), SignedPack.LATEST_URL};
 		}
 		new Main(args);
 	}
