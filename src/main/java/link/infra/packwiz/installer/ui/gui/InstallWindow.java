@@ -27,6 +27,7 @@ public final class InstallWindow extends JFrame {
 	private final JLabel count = new JLabel();
 	private final JProgressBar progress = new JProgressBar();
 	private final JButton options = new JButton("任意 MOD…");
+	private final JButton about = new JButton("About");
 	private final JButton cancel = new JButton("キャンセル");
 	private final JButton ok = new JButton("続ける");
 	private final PackCover homeCover;
