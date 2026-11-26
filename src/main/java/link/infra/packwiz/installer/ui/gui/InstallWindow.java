@@ -5,11 +5,9 @@ import link.infra.packwiz.installer.ui.data.LauncherBranding;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import javax.swing.plaf.basic.BasicButtonUI;
-import javax.swing.plaf.basic.BasicProgressBarUI;
 import java.awt.*;
-import java.awt.event.FocusAdapter;
-import java.awt.event.FocusEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.nio.file.Path;
@@ -22,10 +20,7 @@ import java.util.function.Consumer;
 
 /** The pack home screen and packwiz progress. */
 public final class InstallWindow extends JFrame {
-	private static final Color PINE = new Color(0x10211F);
-	private static final Color CREAM = new Color(0xFAF7E9);
-	private final JLabel status = new JLabel("待機中");
-	private final JButton launch = new JButton("起動", new PlayIcon());
+	private final JButton launch = new JButton("起動", PixelStyle.icon("play"));
 	private final CardLayout launchCards = new CardLayout();
 	private final JPanel launchArea = new JPanel(launchCards);
 	private final JLabel stage = new JLabel();
@@ -34,67 +29,70 @@ public final class InstallWindow extends JFrame {
 	private final JButton options = new JButton("任意 MOD…");
 	private final JButton cancel = new JButton("キャンセル");
 	private final JButton ok = new JButton("続ける");
-	private final PackCover homeCover = new PackCover(new LauncherBranding(LauncherIdentity.NAME, null, null), launchArea);
+	private final PackCover homeCover;
 	private volatile SettingsWindow settings;
 	private final List<Runnable> waitingForSettings = new ArrayList<>();
 
 	public InstallWindow(GUIHandler handler) {
 		super(LauncherIdentity.NAME);
+		setUndecorated(true);
+		setResizable(false);
 		setIconImage(LauncherIdentity.ICON);
 		setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
 		addWindowListener(new WindowAdapter() {
+			@Override public void windowOpened(WindowEvent event) {
+				launch.requestFocusInWindow();
+			}
+
 			@Override public void windowClosing(WindowEvent event) {
 				handler.requestWindowClose();
 			}
 		});
 
-		JPanel content = new JPanel(new BorderLayout());
-		setContentPane(content);
 		JPanel header = new JPanel(new BorderLayout(12, 0));
-		header.setBackground(PINE);
-		header.setBorder(new EmptyBorder(6, 36, 6, 36));
-		JLabel packName = new JLabel(LauncherIdentity.NAME);
-		packName.setForeground(CREAM);
-		packName.setFont(LauncherFonts.emphasis(packName.getFont(), 16f));
+		header.setOpaque(false);
+		header.setBorder(new EmptyBorder(15, 22, 10, 17));
+		JLabel appIcon = new JLabel();
+		appIcon.getAccessibleContext().setAccessibleName(LauncherIdentity.NAME);
 		if (LauncherIdentity.ICON != null) {
-			packName.setIcon(new ImageIcon(LauncherIdentity.ICON.getScaledInstance(32, 32, Image.SCALE_SMOOTH)));
-			packName.setIconTextGap(10);
+			appIcon.setIcon(new ImageIcon(LauncherIdentity.ICON.getScaledInstance(32, 32, Image.SCALE_REPLICATE)));
 		}
-		header.add(packName, BorderLayout.CENTER);
-		JButton openSettings = new JButton("設定");
-		styleButton(openSettings, CREAM, PINE, new Color(0x2B403C));
+		header.add(appIcon, BorderLayout.WEST);
+		JButton openSettings = iconButton("sliders", "設定", 44);
 		openSettings.addActionListener(e -> showSettings(this, ignored -> {}));
-		header.add(openSettings, BorderLayout.EAST);
-		content.add(header, BorderLayout.NORTH);
+		JButton minimize = iconButton("minus", "最小化", 36);
+		minimize.addActionListener(e -> setState(Frame.ICONIFIED));
+		JButton close = iconButton("close", "閉じる", 36);
+		close.addActionListener(e -> dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING)));
+		JPanel windowControls = new JPanel(new GridLayout(1, 0, 6, 0));
+		windowControls.setOpaque(false);
+		windowControls.add(minimize);
+		windowControls.add(close);
+		header.add(windowControls, BorderLayout.EAST);
+		enableHeaderDrag(header, appIcon);
 
-		styleButton(launch, PINE, CREAM, Color.WHITE);
-		launch.setFont(LauncherFonts.emphasis(launch.getFont(), 16f));
-		launch.setIconTextGap(12);
+		PixelStyle.styleButton(launch, true, false);
+		launch.setFont(PixelStyle.font(launch.getFont(), 23f));
+		launch.setIconTextGap(10);
 		launch.addActionListener(e -> handler.requestLaunch());
 		launchArea.setOpaque(false);
-		JPanel launchCard = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 6));
+		JPanel launchCard = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
 		launchCard.setOpaque(false);
-		launch.setPreferredSize(new Dimension(160, 47));
+		launch.setPreferredSize(new Dimension(175, 54));
 		launchCard.add(launch);
 		launchArea.add(launchCard, "launch");
 		launchArea.add(createProgressCard(), "progress");
 		getRootPane().setDefaultButton(launch);
-		content.add(homeCover, BorderLayout.CENTER);
 
-		JPanel footer = new JPanel(new BorderLayout());
-		footer.setBackground(PINE);
-		footer.setBorder(new EmptyBorder(0, 36, 0, 26));
-		status.putClientProperty("html.disable", true);
-		status.setForeground(new Color(0xD8DFD4));
-		footer.add(status, BorderLayout.CENTER);
-
-		JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING, 5, 6));
+		JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING, 7, 0));
 		actions.setOpaque(false);
+		PixelStyle.styleButton(ok, true, false);
+		PixelStyle.styleButton(cancel, false, false);
 		actions.add(ok);
 		actions.add(cancel);
-		actions.setPreferredSize(new Dimension(210, Math.max(39, cancel.getPreferredSize().height + 12)));
-		footer.add(actions, BorderLayout.EAST);
-		content.add(footer, BorderLayout.SOUTH);
+		actions.add(openSettings);
+		homeCover = new PackCover(new LauncherBranding(LauncherIdentity.NAME, null, null), launchArea, header, actions);
+		setContentPane(homeCover);
 		options.addActionListener(e -> {
 			if (settings != null && !settings.saveAndClose()) return;
 			options.setText("読込中…");
@@ -111,72 +109,66 @@ public final class InstallWindow extends JFrame {
 		pack();
 		Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
 		setSize(Math.min(getWidth(), screen.width), Math.min(getHeight(), screen.height));
-		setMinimumSize(new Dimension(Math.min(450, screen.width), Math.min(420, screen.height)));
 		setLocationRelativeTo(null);
 	}
 
+	private void enableHeaderDrag(Component... surfaces) {
+		MouseAdapter drag = new MouseAdapter() {
+			private Point offset;
+
+			@Override public void mousePressed(MouseEvent event) {
+				if (!SwingUtilities.isLeftMouseButton(event)) return;
+				offset = SwingUtilities.convertPoint(event.getComponent(), event.getPoint(), InstallWindow.this);
+			}
+
+			@Override public void mouseDragged(MouseEvent event) {
+				if (offset != null) setLocation(event.getXOnScreen() - offset.x, event.getYOnScreen() - offset.y);
+			}
+
+			@Override public void mouseReleased(MouseEvent event) {
+				offset = null;
+			}
+		};
+		for (Component surface : surfaces) {
+			surface.addMouseListener(drag);
+			surface.addMouseMotionListener(drag);
+		}
+	}
+
+	private static JButton iconButton(String icon, String label, int size) {
+		JButton button = new JButton(PixelStyle.icon(icon));
+		PixelStyle.styleButton(button, false, "close".equals(icon));
+		button.setBorder(new EmptyBorder(0, 0, 0, 0));
+		button.setPreferredSize(new Dimension(size, size));
+		button.setToolTipText(label);
+		button.getAccessibleContext().setAccessibleName(label);
+		return button;
+	}
+
 	private JPanel createProgressCard() {
-		JPanel panel = new JPanel(new BorderLayout(0, 7));
-		panel.setBackground(new Color(0x142925));
-		panel.setBorder(new EmptyBorder(9, 12, 9, 12));
+		JPanel panel = new JPanel(new BorderLayout(0, 10));
+		panel.setOpaque(false);
 		JPanel row = new JPanel(new BorderLayout(10, 0));
 		row.setOpaque(false);
-		stage.setForeground(CREAM);
-		stage.setFont(LauncherFonts.emphasis(stage.getFont(), 15f));
-		count.setForeground(new Color(0xD8DFD4));
+		stage.setForeground(PixelStyle.CREAM);
+		stage.setFont(PixelStyle.font(stage.getFont(), 17f));
+		count.setForeground(new Color(0xDFEBCC));
+		count.setFont(PixelStyle.font(count.getFont(), 17f));
 		row.add(stage, BorderLayout.CENTER);
 		row.add(count, BorderLayout.EAST);
 		panel.add(row, BorderLayout.NORTH);
-		progress.setUI(new BasicProgressBarUI() {
-			@Override protected int getCellLength() { return 1; }
-			@Override protected int getCellSpacing() { return 0; }
-		});
-		progress.setBackground(new Color(0x40544F));
-		progress.setForeground(new Color(0xA9C9A6));
-		progress.setBorderPainted(false);
-		progress.setPreferredSize(new Dimension(160, 5));
+		PixelStyle.styleProgress(progress);
+		progress.setPreferredSize(new Dimension(160, 23));
 		progress.getAccessibleContext().setAccessibleName("起動準備の進捗");
 		stage.setLabelFor(progress);
 		panel.add(progress, BorderLayout.SOUTH);
 		return panel;
 	}
 
-	private static void styleButton(JButton button, Color foreground, Color background, Color hover) {
-		button.setUI(new BasicButtonUI());
-		button.setOpaque(true);
-		button.setRolloverEnabled(true);
-		button.setForeground(foreground);
-		button.setBackground(background);
-		button.setBorder(new EmptyBorder(8, 13, 8, 13));
-		button.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-		button.addChangeListener(e -> button.setBackground(button.getModel().isRollover()
-				|| button.getModel().isPressed() ? hover : background));
-		button.addFocusListener(new FocusAdapter() {
-			private void focus(boolean focused) {
-				button.setBorder(focused
-						? BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(foreground, 2),
-								new EmptyBorder(6, 11, 6, 11))
-						: new EmptyBorder(8, 13, 8, 13));
-			}
-			@Override public void focusGained(FocusEvent e) { focus(true); }
-			@Override public void focusLost(FocusEvent e) { focus(false); }
-		});
-	}
-
-	private static final class PlayIcon implements Icon {
-		@Override public int getIconWidth() { return 9; }
-		@Override public int getIconHeight() { return 12; }
-		@Override public void paintIcon(Component component, Graphics g, int x, int y) {
-			g.setColor(component.getForeground());
-			g.fillPolygon(new int[] {x, x + 9, x}, new int[] {y, y + 6, y + 12}, 3);
-		}
-	}
-
 	public void startInstalling() {
 		launchCards.show(launchArea, "progress");
 		getRootPane().setDefaultButton(null);
 		stage.setText("パックを確認中");
-		status.setText("");
 		progress.setIndeterminate(true);
 		cancel.setVisible(true);
 	}
@@ -218,8 +210,7 @@ public final class InstallWindow extends JFrame {
 			progress.setValue(update.getProgress());
 		}
 		count.setText(update.getHasProgress() ? update.getProgress() + " / " + update.getProgressTotal() : "");
-		status.setText(update.getMessage());
-		status.setToolTipText(update.getMessage());
+		stage.setToolTipText(update.getMessage());
 	}
 
 	void showManualDownloadProgress(int remaining, int total) {
@@ -228,8 +219,7 @@ public final class InstallWindow extends JFrame {
 		progress.setIndeterminate(false);
 		progress.setMaximum(total);
 		progress.setValue(total - remaining);
-		status.setText("");
-		status.setToolTipText(null);
+		stage.setToolTipText(null);
 	}
 
 	public void showLaunchReady() {
@@ -237,8 +227,7 @@ public final class InstallWindow extends JFrame {
 		count.setText("");
 		progress.setIndeterminate(false);
 		progress.setValue(progress.getMaximum());
-		status.setText("");
-		status.setToolTipText(null);
+		stage.setToolTipText(null);
 		cancel.setVisible(false);
 	}
 

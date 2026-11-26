@@ -20,6 +20,11 @@ packwiz-installer itself is under the MIT license ([Source](https://github.com/p
 - Noto Sans JP: SIL Open Font License 1.1 ([Source](https://github.com/google/fonts/tree/main/ofl/notosansjp))
   - Copyright 2014–2021 Adobe. Regular and Medium are static instances of the upstream variable font.
   - The full license is bundled as `link/infra/packwiz/installer/ui/NotoSansJP-OFL.txt`.
+- DotGothic16: SIL Open Font License 1.1 ([Source](https://github.com/google/fonts/tree/main/ofl/dotgothic16))
+  - The full license is bundled as `link/infra/packwiz/installer/ui/DotGothic16-OFL.txt`.
+- Pixelarticons: MIT ([Source](https://github.com/halfmage/pixelarticons/tree/c9ecc2da61afde85dbe539025e3d931c6152ad75))
+  - Copyright (c) 2019 Gerrit Halfmann.
+  - The full license is bundled as `link/infra/packwiz/installer/ui/pixelarticons/LICENSE.txt`.
 
 ## Associated notices
 

@@ -36,15 +36,14 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.SwingWorker;
 import javax.swing.SwingConstants;
-import javax.swing.plaf.basic.BasicButtonUI;
 
 final class ManualDownloadWindow extends JDialog {
-	private static final Color SURFACE = new Color(0x192C26);
-	private static final Color TEXT = new Color(0xF4F1E6);
-	private static final Color MUTED = new Color(0xBDCFC1);
-	private static final Color LINE = new Color(0x3A5146);
-	private static final Color CONFIRMED = new Color(0xBFDFAB);
-	private static final String RESUME_NOTE = "すべて確認できると、自動で起動準備を再開します。";
+	private static final Color SURFACE = new Color(0x1A281E);
+	private static final Color TEXT = new Color(0xEEEAD7);
+	private static final Color MUTED = new Color(0xC4CFBB);
+	private static final Color LINE = new Color(0x536253);
+	private static final Color CONFIRMED = new Color(0xD6E7AB);
+	private static final String RESUME_NOTE = "必要なJARがそろうと、起動準備を再開します。";
 
 	@FunctionalInterface
 	interface Scanner {
@@ -54,7 +53,7 @@ final class ManualDownloadWindow extends JDialog {
 	private final InstallWindow parentWindow;
 	private final List<ManualDownload> downloads;
 	private final List<JPanel> rowActions = new ArrayList<>();
-	private final JButton openAll = action("未取得の配布ページをすべて開く", true);
+	private final JButton openAll = action("未取得の配布ページを開く", true);
 	private final JButton openFolder = action("フォルダーを開く", false);
 	private final JLabel remaining = label("");
 	private final JLabel status = label(RESUME_NOTE);
@@ -71,18 +70,21 @@ final class ManualDownloadWindow extends JDialog {
 		watchedFolder = initialFolder;
 		setUndecorated(true);
 		setDefaultCloseOperation(DISPOSE_ON_CLOSE);
-		getRootPane().setBorder(BorderFactory.createLineBorder(new Color(0x657F70)));
+		getRootPane().setBorder(BorderFactory.createCompoundBorder(
+				BorderFactory.createLineBorder(new Color(0x8C9980), 2),
+				BorderFactory.createLineBorder(new Color(0x344437), 2)));
 		getRootPane().registerKeyboardAction(e -> dispose(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
 				JComponent.WHEN_IN_FOCUSED_WINDOW);
 		JPanel body = panel(new BorderLayout(0, 14));
-		body.setBorder(BorderFactory.createEmptyBorder(21, 24, 18, 24));
+		body.setBorder(BorderFactory.createEmptyBorder(18, 21, 18, 21));
 		setContentPane(body);
 
 		JPanel instructions = panel(new BorderLayout(0, 14));
 		JPanel overview = panel(new BorderLayout(12, 0));
 		JPanel titles = panel(new BorderLayout(0, 3));
 		JLabel title = label("不足しているMOD");
-		title.setFont(LauncherFonts.emphasis(title.getFont(), 21f));
+		title.setFont(PixelStyle.font(title.getFont(), 25f));
+		title.setForeground(new Color(0xF7EBC6));
 		titles.add(title, BorderLayout.NORTH);
 		remaining.setForeground(MUTED);
 		titles.add(remaining, BorderLayout.CENTER);
@@ -117,7 +119,6 @@ final class ManualDownloadWindow extends JDialog {
 		}));
 		JPanel folderActions = panel(new FlowLayout(FlowLayout.TRAILING, 6, 0));
 		folderActions.add(openFolder);
-		folderActions.add(settings);
 		destination.add(folderActions, BorderLayout.EAST);
 		instructions.add(destination, BorderLayout.SOUTH);
 		body.add(instructions, BorderLayout.NORTH);
@@ -139,7 +140,7 @@ final class ManualDownloadWindow extends JDialog {
 			// Keep the browser action visible even when a mod has a very long filename.
 			names.setPreferredSize(new Dimension(180, names.getPreferredSize().height));
 			row.add(names, BorderLayout.CENTER);
-			JButton page = action("配布ページを開く", false);
+			JButton page = action("配布ページ", false);
 			page.setToolTipText(download.getUrl());
 			page.getAccessibleContext().setAccessibleDescription(download.getName());
 			page.addActionListener(e -> BrowserPages.open(this, Collections.singleton(download.getUrl()), () -> {}));
@@ -158,7 +159,7 @@ final class ManualDownloadWindow extends JDialog {
 		JScrollPane scroll = new JScrollPane(list);
 		int visibleRows = Math.max(1, Math.min(7, downloads.size()));
 		int rowHeight = rows.getComponentCount() == 0 ? 54 : rows.getComponent(0).getPreferredSize().height;
-		scroll.setPreferredSize(new Dimension(490, rowHeight * visibleRows + 1));
+		scroll.setPreferredSize(new Dimension(515, rowHeight * visibleRows + 1));
 		scroll.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, LINE));
 		scroll.getVerticalScrollBar().setUnitIncrement(rowHeight);
 		body.add(scroll, BorderLayout.CENTER);
@@ -184,8 +185,11 @@ final class ManualDownloadWindow extends JDialog {
 			reviewErrors = true;
 			dispose();
 		});
-		actions.add(errors, BorderLayout.WEST);
-		JButton cancel = action("起動をキャンセル", false);
+		JPanel tools = panel(new FlowLayout(FlowLayout.LEADING, 6, 0));
+		tools.add(settings);
+		tools.add(errors);
+		actions.add(tools, BorderLayout.WEST);
+		JButton cancel = action("起動を中止", false);
 		cancel.addActionListener(e -> dispose());
 		actions.add(cancel, BorderLayout.EAST);
 		footer.add(actions, BorderLayout.SOUTH);
@@ -199,7 +203,7 @@ final class ManualDownloadWindow extends JDialog {
 		boolean wasVisible = previous.isVisible();
 		JComponent shade = new JComponent() {
 			@Override protected void paintComponent(Graphics g) {
-				g.setColor(new Color(9, 23, 19, 156));
+				g.setColor(new Color(11, 19, 14, 196));
 				g.fillRect(0, 0, getWidth(), getHeight());
 			}
 		};
@@ -229,23 +233,7 @@ final class ManualDownloadWindow extends JDialog {
 
 	private static JButton action(String text, boolean primary) {
 		JButton button = new JButton(text);
-		Color normal = primary ? new Color(0xE5EADB) : new Color(0x263D34);
-		Color hovered = primary ? new Color(0xF7F5E7) : new Color(0x36564A);
-		Color line = primary ? normal : new Color(0x577066);
-		button.setUI(new BasicButtonUI());
-		button.setOpaque(true);
-		button.setRolloverEnabled(true);
-		button.setForeground(primary ? new Color(0x182319) : TEXT);
-		button.setBackground(normal);
-		button.setMargin(new java.awt.Insets(0, 0, 0, 0));
-		button.addChangeListener(e -> {
-			button.setBackground(!button.isEnabled() ? SURFACE : button.getModel().isRollover() ? hovered : normal);
-			button.setBorder(BorderFactory.createCompoundBorder(
-					BorderFactory.createLineBorder(button.hasFocus() ? new Color(0xFFE0AB) : line),
-					BorderFactory.createEmptyBorder(7, 10, 7, 10)));
-		});
-		button.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line),
-				BorderFactory.createEmptyBorder(7, 10, 7, 10)));
+		PixelStyle.styleButton(button, primary, false);
 		if (primary) button.setFont(LauncherFonts.emphasis(button.getFont(), button.getFont().getSize2D()));
 		return button;
 	}
@@ -338,7 +326,7 @@ final class ManualDownloadWindow extends JDialog {
 	}
 
 	private void updateRemaining(int count) {
-		remaining.setText("残り " + count + " 件 ・ " + downloads.size() + " 件中 " + (downloads.size() - count) + " 件を確認済み");
+		remaining.setText("残り " + count + " 件");
 		parentWindow.showManualDownloadProgress(count, downloads.size());
 	}
 }

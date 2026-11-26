@@ -11,35 +11,41 @@ import javax.swing.UIManager;
 import java.awt.Color;
 import java.awt.Dimension;
 import java.awt.Font;
-import java.awt.FontFormatException;
 import java.awt.GradientPaint;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
 import java.awt.RenderingHints;
+import java.awt.font.TextAttribute;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Collections;
 
 /** Artwork and pack information for the home screen. */
 final class PackCover extends JPanel {
-	private static final Color PAPER = new Color(250, 247, 233);
-	private static final Font DISPLAY_FONT = loadDisplayFont();
+	private static final Color PAPER = new Color(0xFFF3CC);
 	private static final BufferedImage DEFAULT_ART = loadDefaultArt();
 
 	private final JTextArea title = textArea("パック名");
 	private final JTextArea subtitle = textArea("パックの説明");
 	private final JComponent launchArea;
+	private final JComponent titleBar;
+	private final JComponent cornerActions;
 	private Image artwork = DEFAULT_ART;
-	private Font titleFamily = DISPLAY_FONT;
+	private Font titleFamily = PixelStyle.font(new Font(Font.SANS_SERIF, Font.PLAIN, 1), 1f);
 	private int layoutWidth = -1;
 	private int layoutHeight;
 
-	PackCover(LauncherBranding branding, JComponent launchArea) {
+	PackCover(LauncherBranding branding, JComponent launchArea, JComponent titleBar, JComponent cornerActions) {
 		super(null);
 		this.launchArea = launchArea;
+		this.titleBar = titleBar;
+		this.cornerActions = cornerActions;
 		setBackground(new Color(25, 44, 42));
-		setPreferredSize(new Dimension(1000, 550));
+		setPreferredSize(new Dimension(1152, 700));
+		add(titleBar);
+		add(cornerActions);
 		add(title);
 		add(subtitle);
 		add(launchArea);
@@ -47,7 +53,26 @@ final class PackCover extends JPanel {
 	}
 
 	private static JTextArea textArea(String accessibleName) {
-		JTextArea area = new JTextArea();
+		JTextArea area = new JTextArea() {
+			private boolean paintingShadow;
+
+			@Override public Color getForeground() {
+				return paintingShadow ? new Color(0x1E2A1E) : super.getForeground();
+			}
+
+			@Override protected void paintComponent(Graphics graphics) {
+				Graphics shadow = graphics.create();
+				try {
+					paintingShadow = true;
+					shadow.translate(3, 4);
+					super.paintComponent(shadow);
+				} finally {
+					paintingShadow = false;
+					shadow.dispose();
+				}
+				super.paintComponent(graphics);
+			}
+		};
 		area.setFont(UIManager.getFont("Label.font"));
 		area.setEditable(false);
 		area.setFocusable(false);
@@ -58,15 +83,6 @@ final class PackCover extends JPanel {
 		area.setWrapStyleWord(true);
 		area.getAccessibleContext().setAccessibleName(accessibleName);
 		return area;
-	}
-
-	private static Font loadDisplayFont() {
-		try (InputStream in = PackCover.class.getResourceAsStream("/link/infra/packwiz/installer/ui/YoungSerif-Regular.ttf")) {
-			if (in != null) return Font.createFont(Font.TRUETYPE_FONT, in);
-		} catch (IOException | FontFormatException ignored) {
-			// The logical font also supplies glyphs outside the embedded font's range.
-		}
-		return new Font(Font.SERIF, Font.PLAIN, 1);
 	}
 
 	private static BufferedImage loadDefaultArt() {
@@ -82,7 +98,8 @@ final class PackCover extends JPanel {
 		String name = branding.getTitle();
 		title.setText(name);
 		title.setToolTipText(name);
-		titleFamily = DISPLAY_FONT.canDisplayUpTo(name) < 0 ? DISPLAY_FONT : new Font(Font.SERIF, Font.PLAIN, 1);
+		titleFamily = PixelStyle.font(UIManager.getFont("Label.font"), 1f);
+		if (titleFamily.canDisplayUpTo(name) >= 0) titleFamily = UIManager.getFont("Label.font");
 		String description = branding.getSubtitle();
 		subtitle.setText(description);
 		subtitle.setToolTipText(description);
@@ -100,35 +117,41 @@ final class PackCover extends JPanel {
 		if (layoutWidth == width && layoutHeight == height) return;
 		layoutWidth = width;
 		layoutHeight = height;
+		int titleBarHeight = titleBar.getPreferredSize().height;
+		titleBar.setBounds(0, 0, width, titleBarHeight);
+		cornerActions.setBounds(0, height - 60, width - 17, 44);
 		int inset = Math.max(24, (int) (width * .07));
 		int contentWidth = Math.max(1, width - 2 * inset);
-		int bottom = height - Math.max(26, height / 11);
-		launchArea.setBounds(inset, bottom - 59, Math.min(contentWidth, 344), 59);
-		bottom -= 80;
+		int bottom = height - Math.max(64, Math.min(105, (int) (width * .09)));
+		launchArea.setBounds(inset, bottom - 63, Math.min(contentWidth, 390), 63);
+		bottom -= 90;
 		if (subtitle.isVisible()) {
 			int subtitleWidth = Math.min(contentWidth, 620);
-			subtitle.setFont(UIManager.getFont("Label.font").deriveFont(16f));
+			Font fallback = UIManager.getFont("Label.font");
+			Font font = PixelStyle.font(fallback, 18f);
+			Font subtitleFont = font.canDisplayUpTo(subtitle.getText()) < 0 ? font : fallback.deriveFont(18f);
+			subtitle.setFont(subtitleFont.deriveFont(Collections.singletonMap(TextAttribute.TRACKING, .06f)));
 			subtitle.setSize(subtitleWidth, 1);
 			int linesHeight = Math.min(subtitle.getPreferredSize().height, height / 3);
 			bottom -= linesHeight;
 			subtitle.setBounds(inset, bottom, subtitleWidth, linesHeight);
-			bottom -= 14;
 		}
 
-		int available = Math.max(20, bottom - 8);
+		int available = Math.max(20, bottom - titleBarHeight - 8);
 		boolean longTitle = title.getText().codePointCount(0, title.getText().length()) > 32;
-		int size = Math.min(longTitle ? 59 : 96, Math.max(40, width / 10));
-		int titleWidth = Math.min(contentWidth, longTitle ? 880 : size * 6);
+		int size = Math.min(longTitle ? 66 : 110, Math.max(56, (int) (width * .095)));
+		int titleWidth = Math.min(contentWidth, longTitle ? 880 : Math.max(480, size * 6));
 		int titleHeight;
 		do {
-			title.setFont(titleFamily.deriveFont((float) size));
+			title.setFont(titleFamily.deriveFont((float) size)
+					.deriveFont(Collections.singletonMap(TextAttribute.TRACKING, .05f)));
 			title.setSize(titleWidth, 1);
 			titleHeight = title.getPreferredSize().height;
 			if (titleHeight <= available || size <= 18) break;
 			size -= 4;
 		} while (true);
 		titleHeight = Math.min(titleHeight, available);
-		title.setBounds(inset, bottom - titleHeight, titleWidth, titleHeight);
+		title.setBounds(inset, bottom - titleHeight, titleWidth, titleHeight + 4);
 	}
 
 	@Override
@@ -159,9 +182,11 @@ final class PackCover extends JPanel {
 			g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 			g.drawImage(artwork, (int) ((width - scaledWidth) * .58), (int) ((height - scaledHeight) * .51),
 					scaledWidth, scaledHeight, this);
-			g.setPaint(new GradientPaint(0f, 0f, new Color(9, 23, 23, 170), width, 0f, new Color(9, 23, 23, 65)));
+			g.setPaint(new GradientPaint(0f, 0f, new Color(11, 24, 18, 121), width * .66f, 0f, new Color(11, 24, 18, 0)));
 			g.fillRect(0, 0, width, height);
-			g.setPaint(new GradientPaint(0f, 0f, new Color(9, 23, 23, 15), 0f, height, new Color(9, 23, 23, 205)));
+			g.setPaint(new GradientPaint(0f, height * .28f, new Color(17, 35, 27, 25), 0f, height, new Color(16, 27, 21, 240)));
+			g.fillRect(0, 0, width, height);
+			g.setPaint(new GradientPaint(0f, 0f, new Color(14, 26, 21, 160), 0f, height * .28f, new Color(14, 26, 21, 0)));
 			g.fillRect(0, 0, width, height);
 		} finally {
 			g.dispose();
