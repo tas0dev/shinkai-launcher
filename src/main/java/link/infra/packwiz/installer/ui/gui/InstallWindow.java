@@ -61,8 +61,8 @@ public final class InstallWindow extends JFrame {
 		header.add(appIcon, BorderLayout.WEST);
 
 		// About //
-		JButton openAbout = iconButton("information", "About", 44);
-		openAbout.addActionListener(e -> showAbout());
+		JButton openAbout = iconButton("information", "このランチャーについて", 44);
+		openAbout.addActionListener(e -> AboutDialog.show(this));
 
 		// Settings //
 		JButton openSettings = iconButton("sliders", "設定", 44);
@@ -125,15 +125,6 @@ public final class InstallWindow extends JFrame {
 		setSize(Math.min(getWidth(), screen.width), Math.min(getHeight(), screen.height));
 		setLocationRelativeTo(null);
 	}
-
-    private void showAbout() {
-        try {
-			AboutDialog aboutDialog = new AboutDialog();
-			aboutDialog.setVisible(true, this);
-		} catch (Exception e) {
-			System.err.println("Failed to show About dialog: " + e.getMessage());
-		}
-    }
 
     private void enableHeaderDrag(Component... surfaces) {
 		MouseAdapter drag = new MouseAdapter() {

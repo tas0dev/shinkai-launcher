@@ -1,63 +1,109 @@
 package link.infra.packwiz.installer.ui.gui
 
 import java.awt.BorderLayout
-import java.awt.Component;
-import java.awt.Frame
+import java.awt.Component
+import java.awt.Dialog
+import java.awt.Dimension
+import java.awt.FlowLayout
+import java.awt.Font
+import java.awt.Image
+import java.awt.Toolkit
+import java.awt.Window
+import java.awt.event.ActionEvent
+import java.awt.event.KeyEvent
+import javax.swing.AbstractAction
+import javax.swing.Box
 import javax.swing.BoxLayout
+import javax.swing.ImageIcon
 import javax.swing.JButton
+import javax.swing.JComponent
 import javax.swing.JDialog
 import javax.swing.JLabel
-import javax.swing.JOptionPane
+import javax.swing.JPanel
+import javax.swing.JSeparator
+import javax.swing.KeyStroke
+import javax.swing.SwingConstants
+import javax.swing.SwingUtilities
 import javax.swing.WindowConstants
+import javax.swing.border.EmptyBorder
 
-class AboutDialog{
-    private var visible: Boolean = false;
-
-    fun setVisible(visible: Boolean, parent: Component) {
-        this.visible = visible;
-        if (visible) {
-            AboutDialogObject.showAbout(parent);
-        }
+object AboutDialog {
+    @JvmStatic
+    fun show(parent: Component) {
+        val dialog = launcherDialog(parent, "このランチャーについて")
+        val close = launcherDialogButton("閉じる") { dialog.dispose() }
+        dialog.contentPane = aboutContent(close) { OpenSourceLicense.show(dialog) }
+        dialog.isResizable = false
+        dialog.open(close)
     }
 
-    object AboutDialogObject {
-        @JvmStatic
-        fun showAbout(parent: Component) {
-            val owner = parent as? Frame ?: javax.swing.SwingUtilities.getWindowAncestor(parent) as? Frame
-            val dialog = AboutDialogView(owner ?: throw IllegalArgumentException("Parent component must be a Frame or have a Frame ancestor"))
-            dialog.defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
-            dialog.pack()
-            dialog.setLocationRelativeTo(owner)
-            dialog.isVisible = true
+    internal fun aboutContent(close: JButton, openLicenses: () -> Unit): JPanel {
+        val version = javaClass.`package`.implementationVersion ?: "開発版"
+        val identity = JPanel(BorderLayout(16, 0)).apply {
+            LauncherIdentity.ICON?.let { image ->
+                add(JLabel(ImageIcon(image.getScaledInstance(56, 56, Image.SCALE_REPLICATE))).apply {
+                    verticalAlignment = SwingConstants.CENTER
+                    horizontalAlignment = SwingConstants.CENTER
+                }, BorderLayout.WEST)
+            }
+            add(JPanel().apply {
+                layout = BoxLayout(this, BoxLayout.Y_AXIS)
+                add(JLabel(LauncherIdentity.NAME).apply {
+                    font = font.deriveFont(Font.BOLD, 21f)
+                })
+                add(Box.createVerticalStrut(4))
+                add(JLabel("バージョン $version"))
+            }, BorderLayout.CENTER)
         }
 
+        val credits = JPanel().apply {
+            layout = BoxLayout(this, BoxLayout.Y_AXIS)
+            add(JLabel("Copyright (c) 2021 comp500"))
+            add(Box.createVerticalStrut(3))
+            add(JLabel("Copyright (c) 2026 tas0dev"))
+        }
+        val actions = JPanel(FlowLayout(FlowLayout.TRAILING, 8, 0)).apply {
+            add(launcherDialogButton("オープンソースライセンス", action = openLicenses))
+            add(close)
+        }
+
+        return JPanel(BorderLayout(0, 14)).apply {
+            border = EmptyBorder(16, 16, 16, 16)
+            add(identity, BorderLayout.NORTH)
+            add(credits, BorderLayout.CENTER)
+            add(JPanel(BorderLayout(0, 12)).apply {
+                add(JSeparator(), BorderLayout.NORTH)
+                add(actions, BorderLayout.EAST)
+            }, BorderLayout.SOUTH)
+        }
     }
 }
 
-class AboutDialogView(owner: Frame) : JDialog(owner, "About", true) {
-    val version = AboutDialog::class.java.`package`.implementationVersion ?: "開発版"
-
-    init {
-        contentPane.layout = BoxLayout(contentPane, BoxLayout.Y_AXIS)
-        defaultCloseOperation = DO_NOTHING_ON_CLOSE
-
-        isResizable = false
-        add(JLabel("Shinkai Launcher"))
-        add(JLabel("Version: $version\n"))
-
-        add(JLabel("Copyright (c) 2021 comp500\n" +
-                         "Copyright (c) 2026 tas0dev"))
-        add(JButton("Open Source Licenses").apply {
-            addActionListener {
-                val licenseDialog = OpenSourceLicense()
-//                licenseDialog.setVisible(true, this@AboutDialogView)
-            }
-        })
-
-        add(JButton("Close").apply {
-            addActionListener {
-                dispose()
-            }
-        })
+internal fun launcherDialog(parent: Component, title: String): JDialog {
+    val owner = parent as? Window ?: SwingUtilities.getWindowAncestor(parent)
+    return JDialog(owner, title, Dialog.ModalityType.DOCUMENT_MODAL).apply {
+        defaultCloseOperation = WindowConstants.DISPOSE_ON_CLOSE
+        setIconImage(LauncherIdentity.ICON)
     }
+}
+
+internal fun launcherDialogButton(label: String, action: () -> Unit) = JButton(label).apply {
+    addActionListener { action() }
+}
+
+internal fun JDialog.open(close: JButton) {
+    rootPane.defaultButton = close
+    rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW)
+        .put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "closeDialog")
+    rootPane.actionMap.put("closeDialog", object : AbstractAction() {
+        override fun actionPerformed(event: ActionEvent) = dispose()
+    })
+    pack()
+    val screen = (owner?.graphicsConfiguration ?: graphicsConfiguration)
+    val insets = Toolkit.getDefaultToolkit().getScreenInsets(screen)
+    val available = Dimension(screen.bounds.width - insets.left - insets.right,
+        screen.bounds.height - insets.top - insets.bottom)
+    size = Dimension(minOf(width, available.width), minOf(height, available.height))
+    setLocationRelativeTo(owner)
+    isVisible = true
 }
