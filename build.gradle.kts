@@ -171,6 +171,47 @@ tasks.build {
 	dependsOn(copyJar)
 }
 
+val bootstrap by sourceSets.creating
+val bootstrapTools by sourceSets.creating
+val bootstrapTest by sourceSets.creating
+listOf(bootstrapTools, bootstrapTest).forEach {
+	dependencies.add(it.implementationConfigurationName, bootstrap.output)
+}
+dependencies.add(bootstrapTest.implementationConfigurationName, bootstrapTools.output)
+listOf(bootstrap, bootstrapTools, bootstrapTest).forEach {
+	tasks.named<JavaCompile>(it.compileJavaTaskName) { options.release.set(17) }
+}
+
+val shinkaiReleaseDirectory = layout.buildDirectory.dir("shinkai-release")
+val shinkaiBootstrap by tasks.registering(Jar::class) {
+	from(bootstrap.output)
+	archiveFileName.set("shinkai-bootstrap.jar")
+	destinationDirectory.set(shinkaiReleaseDirectory)
+	manifest.attributes["Main-Class"] = "shinkai.bootstrap.Bootstrap"
+	isPreserveFileTimestamps = false
+	isReproducibleFileOrder = true
+}
+
+tasks.register<JavaExec>("testShinkaiBootstrap") {
+	classpath = bootstrapTest.runtimeClasspath
+	mainClass.set("shinkai.bootstrap.BootstrapTest")
+}
+
+tasks.register<JavaExec>("signShinkaiLauncher") {
+	dependsOn(shinkaiBootstrap, distJar)
+	classpath = bootstrapTools.runtimeClasspath
+	mainClass.set("shinkai.bootstrap.SignRelease")
+	doFirst {
+		check(providers.gradleProperty("shinkaiSigningPublicKey").isPresent) { "Set -PshinkaiSigningPublicKey to the MOD pack public key" }
+		val signingKey = providers.gradleProperty("shinkaiLauncherSigningPrivateKey").orNull
+			?: error("Set -PshinkaiLauncherSigningPrivateKey to the separate launcher release signing key")
+		val sequence = providers.gradleProperty("shinkaiReleaseSequence").orNull
+			?: error("Set -PshinkaiReleaseSequence to the number from the shinkai-v<N> release tag")
+		args(sequence, distJar.get().archiveFile.get().asFile.absolutePath,
+			file(signingKey).absolutePath, shinkaiReleaseDirectory.get().asFile.absolutePath)
+	}
+}
+
 githubRelease {
 	owner("comp500")
 	repo("packwiz-installer")
