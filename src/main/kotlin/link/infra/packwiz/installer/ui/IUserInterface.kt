@@ -19,13 +19,13 @@ interface IUserInterface {
 	var title: String
 	fun setPackName(packName: String) {}
 	fun submitProgress(progress: InstallProgress)
+	val selectNewOptionalMods: Boolean get() = false
 	// Return true if the installation was cancelled!
 	fun showOptions(options: List<IOptionDetails>): Boolean
 
 	fun showExceptions(exceptions: List<ExceptionDetails>, numTotal: Int, allowsIgnore: Boolean): ExceptionListResult
 	/** Return true to continue (any remaining failures are reviewed), or false to cancel the launch. */
 	fun showManualDownloads(downloads: List<ManualDownload>, scan: (Path) -> Set<ManualDownload>): Boolean = true
-	fun disableOptionsButton(hasOptions: Boolean) {}
 
 	fun showCancellationDialog(): CancellationResult = CancellationResult.QUIT
 
@@ -33,8 +33,6 @@ interface IUserInterface {
 		// Always update metadata when using the CLI
 		return UpdateConfirmationResult.UPDATE
 	}
-
-	fun awaitOptionalButton(showCancel: Boolean, timeout: Long)
 
 	enum class ExceptionListResult {
 		CONTINUE, CANCEL, IGNORE

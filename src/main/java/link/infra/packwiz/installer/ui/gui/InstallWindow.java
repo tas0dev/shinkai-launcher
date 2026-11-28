@@ -29,7 +29,6 @@ public final class InstallWindow extends JFrame {
 	private final JButton options = new JButton("任意 MOD…");
 	private final JButton about = new JButton("About");
 	private final JButton cancel = new JButton("キャンセル");
-	private final JButton ok = new JButton("続ける");
 	private final PackCover homeCover;
 	private volatile SettingsWindow settings;
 	private final List<Runnable> waitingForSettings = new ArrayList<>();
@@ -97,11 +96,9 @@ public final class InstallWindow extends JFrame {
 
 		JPanel actions = new JPanel(new FlowLayout(FlowLayout.TRAILING, 7, 0));
 		actions.setOpaque(false);
-		PixelStyle.styleButton(ok, true, false);
 		PixelStyle.styleButton(cancel, false, false);
 
 		// NOTE: If you add more buttons here, also update the actions.
-		actions.add(ok);
 		actions.add(cancel);
 		actions.add(openAbout);
 		actions.add(openSettings);
@@ -117,8 +114,6 @@ public final class InstallWindow extends JFrame {
 			cancel.setEnabled(false);
 			handler.setCancelButtonPressed(true);
 		});
-		ok.addActionListener(e -> handler.setOkButtonPressed(true));
-		ok.setVisible(false);
 		cancel.setVisible(false);
 		pack();
 		Rectangle screen = GraphicsEnvironment.getLocalGraphicsEnvironment().getMaximumWindowBounds();
@@ -182,6 +177,7 @@ public final class InstallWindow extends JFrame {
 	public void startInstalling() {
 		launchCards.show(launchArea, "progress");
 		getRootPane().setDefaultButton(null);
+		options.setEnabled(false);
 		stage.setText("パックを確認中");
 		progress.setIndeterminate(true);
 		cancel.setVisible(true);
@@ -189,10 +185,6 @@ public final class InstallWindow extends JFrame {
 
 	public void setBranding(LauncherBranding value) {
 		homeCover.setBranding(value);
-	}
-
-	public boolean getSettingsOpen() {
-		return settings != null;
 	}
 
 	public void showSettings(Window owner, Consumer<Path> folderChanged) {
@@ -234,36 +226,5 @@ public final class InstallWindow extends JFrame {
 		progress.setMaximum(total);
 		progress.setValue(total - remaining);
 		stage.setToolTipText(null);
-	}
-
-	public void showLaunchReady() {
-		stage.setText("起動準備が完了しました");
-		count.setText("");
-		progress.setIndeterminate(false);
-		progress.setValue(progress.getMaximum());
-		stage.setToolTipText(null);
-		cancel.setVisible(false);
-	}
-
-	public void disableOptionsButton(boolean hasOptions) {
-		options.setText(hasOptions ? "任意 MOD…" : "任意 MOD なし");
-		options.setEnabled(false);
-	}
-
-	public void showOk(boolean hideCancel) {
-		cancel.setVisible(!hideCancel);
-		ok.setText("続ける");
-		ok.setVisible(true);
-		getRootPane().setDefaultButton(ok);
-	}
-
-	public void hideOk() {
-		ok.setVisible(false);
-		cancel.setVisible(true);
-		getRootPane().setDefaultButton(null);
-	}
-
-	public void timeoutOk(long remaining) {
-		ok.setText("続ける (" + remaining + ")");
 	}
 }

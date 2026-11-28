@@ -12,13 +12,10 @@ import link.infra.packwiz.installer.util.Log
 import java.awt.EventQueue
 import java.io.IOException
 import java.nio.file.Path
-import java.util.Timer
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CountDownLatch
 import javax.swing.JDialog
 import javax.swing.JOptionPane
 import javax.swing.UIManager
-import kotlin.concurrent.timer
 import kotlin.system.exitProcess
 
 class GUIHandler : IUserInterface {
@@ -29,24 +26,14 @@ class GUIHandler : IUserInterface {
 
 	@Volatile
 	override var optionsButtonPressed = false
-		set(value) {
-			field = value
-			optionalSelectedLatch.countDown()
-		}
 	@Volatile
 	override var cancelButtonPressed = false
 		set(value) {
 			field = value
-			optionalSelectedLatch.countDown()
 			cancelCallback?.invoke()
 		}
 	@Volatile
 	override var cancelCallback: (() -> Unit)? = null
-	var okButtonPressed = false
-		set(value) {
-			field = value
-			optionalSelectedLatch.countDown()
-		}
 	@Volatile
 	override var firstInstall = false
 
@@ -73,22 +60,12 @@ class GUIHandler : IUserInterface {
 		}
 	}
 
-	private val visibleCountdownLatch = CountDownLatch(1)
-	private val optionalSelectedLatch = CountDownLatch(1)
-
 	override fun show() = EventQueue.invokeLater {
 		frmPackwizlauncher.isVisible = true
-		visibleCountdownLatch.countDown()
 	}
 
 	override fun dispose() = frmPackwizlauncher.afterSettingsClose {
 		frmPackwizlauncher.dispose()
-	}
-
-	fun showLaunchReady() {
-		frmPackwizlauncher.afterSettingsClose { frmPackwizlauncher.showLaunchReady() }
-		// Give Swing a repaint before the process exits and hands control back to the launcher.
-		Thread.sleep(600)
 	}
 
 	fun awaitLaunch(): Boolean = launchDecision.get()
@@ -217,10 +194,6 @@ class GUIHandler : IUserInterface {
 		return window.awaitDownloads { folder -> scan(folder) }
 	}
 
-	override fun disableOptionsButton(hasOptions: Boolean) = EventQueue.invokeLater {
-		frmPackwizlauncher.disableOptionsButton(hasOptions)
-	}
-
 	override fun showCancellationDialog(): IUserInterface.CancellationResult {
 		val future = CompletableFuture<IUserInterface.CancellationResult>()
 		frmPackwizlauncher.afterSettingsClose {
@@ -283,34 +256,5 @@ class GUIHandler : IUserInterface {
 			)
 		}
 		return future.get()
-	}
-
-	override fun awaitOptionalButton(showCancel: Boolean, timeout: Long) {
-		EventQueue.invokeAndWait {
-			frmPackwizlauncher.showOk(!showCancel)
-		}
-		visibleCountdownLatch.await()
-
-		var closeTimer: Timer? = null
-		if (timeout >= 0) {
-			var count = 0
-			closeTimer = timer("timeout", true, 0, 1000) {
-				if (frmPackwizlauncher.settingsOpen) return@timer
-				if (count >= timeout) {
-					optionalSelectedLatch.countDown()
-					cancel()
-				} else {
-					val remaining = timeout - count
-					EventQueue.invokeLater { frmPackwizlauncher.timeoutOk(remaining) }
-					count += 1
-				}
-			};
-		}
-
-		optionalSelectedLatch.await()
-		closeTimer?.cancel()
-		EventQueue.invokeLater {
-			frmPackwizlauncher.hideOk()
-		}
 	}
 }

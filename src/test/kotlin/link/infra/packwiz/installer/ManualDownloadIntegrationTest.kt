@@ -93,7 +93,7 @@ class ManualDownloadIntegrationTest {
 			}
 			val folder = PackwizFilePath(instance.toOkioPath())
 			val opts = UpdateManager.Options(PackwizFilePath(pack.toOkioPath(), "pack.toml"),
-				folder / "packwiz.json", folder, folder, Side.CLIENT, 0)
+				folder / "packwiz.json", folder, folder, Side.CLIENT)
 			UpdateManager(opts, ui)
 			assertEquals(jar, target.readText())
 			assertEquals(jar, browserCopy.readText())

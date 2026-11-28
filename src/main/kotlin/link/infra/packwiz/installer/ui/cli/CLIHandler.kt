@@ -14,6 +14,7 @@ import java.nio.file.Path
 import kotlin.system.exitProcess
 
 class CLIHandler : IUserInterface {
+	override val selectNewOptionalMods = true
 	@Volatile
 	override var optionsButtonPressed = false
 	// TODO: treat ctrl+c as cancel?
@@ -83,9 +84,5 @@ class CLIHandler : IUserInterface {
 			println("${file.name} (${file.filename}): ${file.url}\n  Installation path: ${file.destination}")
 		}
 		return false
-	}
-
-	override fun awaitOptionalButton(showCancel: Boolean, timeout: Long) {
-		// Do nothing
 	}
 }

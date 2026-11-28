@@ -54,7 +54,6 @@ class UpdateManager internal constructor(
 		val packFolder: PackwizFilePath,
 		val multimcFolder: PackwizFilePath,
 		val side: Side,
-		val timeout: Long,
 	)
 
 	// TODO: make this return a value based on results?
@@ -162,9 +161,6 @@ class UpdateManager internal constructor(
 			if (manifest.packFileHash?.let { it == packFileSource.hash } == true && invalidatedUris.isEmpty()) {
 				// todo: --force?
 				ui.submitProgress(InstallProgress("Modpack is already up to date!", 1, 1, "パックは最新です"))
-				if (manifest.cachedFiles.any { it.value.isOptional }) {
-					ui.awaitOptionalButton(false, opts.timeout)
-				}
 				if (ui.cancelButtonPressed) {
 					showCancellationDialog()
 					handleCancellation()
@@ -218,9 +214,6 @@ class UpdateManager internal constructor(
 		if (!invalidateAll) {
 			if (manifest.indexFileHash == indexHash && invalidatedFiles.isEmpty()) {
 				ui.submitProgress(InstallProgress("Modpack files are already up to date!", 1, 1, "ファイルは最新です"))
-				if (manifest.cachedFiles.any { it.value.isOptional }) {
-					ui.awaitOptionalButton(false, opts.timeout)
-				}
 				if (ui.cancelButtonPressed) {
 					showCancellationDialog()
 					return
@@ -338,29 +331,13 @@ class UpdateManager internal constructor(
 		// TODO: task failed function?
 		tasks.removeAll { it.failed() }
 		val optionTasks = tasks.filter(DownloadTask::correctSide).filter(DownloadTask::isOptional).toList()
-		val optionsChanged = optionTasks.any(DownloadTask::isNewOptional)
-		if (optionTasks.isNotEmpty() && !optionsChanged) {
-			if (!ui.optionsButtonPressed) {
-				// TODO: this is so ugly
-				ui.submitProgress(InstallProgress("Reconfigure optional mods?", 0, 1, "任意 MOD を選択できます"))
-				ui.awaitOptionalButton(true, opts.timeout)
-				if (ui.cancelButtonPressed) {
-					showCancellationDialog()
-					return
-				}
-			}
-		}
-		// If options changed, present all options again
-		if (ui.optionsButtonPressed || optionsChanged) {
+		if (ui.optionsButtonPressed || (ui.selectNewOptionalMods && optionTasks.any(DownloadTask::isNewOptional))) {
 			// new ArrayList is required so it's an IOptionDetails rather than a DownloadTask list
 			if (ui.showOptions(ArrayList(optionTasks))) {
 				cancelled = true
 				handleCancellation()
 			}
 		}
-		// TODO: keep this enabled? then apply changes after download process?
-		ui.disableOptionsButton(optionTasks.isNotEmpty())
-
 		validateAndResolve(tasks, clientHolder)
 
 		// TODO: different thread pool type?
